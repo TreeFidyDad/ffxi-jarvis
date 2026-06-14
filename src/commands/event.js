@@ -93,7 +93,23 @@ async function execute(interaction) {
     });
 
     const payload = buildEventMessage(event, []);
-    const message = await interaction.channel.send(payload);
+    let message;
+    try {
+      message = await interaction.channel.send(payload);
+    } catch (error) {
+      // Roll back the event we just created so it doesn't dangle without a message.
+      db.deleteEvent(event.id);
+      if (error?.code === 50001 || error?.code === 50013) {
+        return interaction.reply({
+          flags: MessageFlags.Ephemeral,
+          content:
+            "⛔ I can't post in this channel. Please give **FFXI Jarvis** the **View Channel**, " +
+            '**Send Messages**, and **Embed Links** permissions here (or run `/event create` in a ' +
+            'channel where I have them), then try again.',
+        });
+      }
+      throw error;
+    }
     db.setEventMessage(event.id, message.id);
 
     return interaction.reply({
