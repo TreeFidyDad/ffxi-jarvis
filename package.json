@@ -1,0 +1,20 @@
+{
+  "name": "ffxi-raid-helper",
+  "version": "0.1.0",
+  "description": "Free, open-source Discord event/raid signup bot for Final Fantasy XI. A self-hostable alternative to Raid-Helper with FFXI Jobs and Tank/Melee/Ranged/Support roles.",
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "luxon": "^3.5.0"
+  }
+}
