@@ -32,6 +32,14 @@ function parseEventTime(date, time, timezone) {
   return { ok: true, ts: Math.floor(dt.toSeconds()) };
 }
 
+// Split a stored unix timestamp back into wall-clock { date, time } strings in
+// the event's timezone — used to prefill the edit modal.
+function formatLocalParts(ts, timezone) {
+  const dt = DateTime.fromSeconds(ts, { zone: timezone });
+  if (!dt.isValid) return { date: '', time: '' };
+  return { date: dt.toFormat('yyyy-MM-dd'), time: dt.toFormat('HH:mm') };
+}
+
 // Discord renders these as localized timestamps in each viewer's own timezone.
 const discordTime = (ts, style = 'F') => `<t:${ts}:${style}>`;
 const discordRelative = (ts) => `<t:${ts}:R>`;
@@ -49,4 +57,4 @@ function googleCalendarLink({ title, startTs, durationMin = 120, details, locati
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-module.exports = { parseEventTime, discordTime, discordRelative, googleCalendarLink };
+module.exports = { parseEventTime, formatLocalParts, discordTime, discordRelative, googleCalendarLink };

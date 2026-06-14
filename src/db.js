@@ -131,6 +131,29 @@ function setEventStatus(id, status) {
   setEventStatusStmt.run(status, id);
 }
 
+// Update a whitelisted set of event columns. Pass only the fields to change.
+// Changing start_ts resets reminder_sent so the reminder fires for the new time.
+const UPDATABLE_COLUMNS = new Set([
+  'title',
+  'description',
+  'start_ts',
+  'timezone',
+  'leader',
+  'url',
+  'image_url',
+  'cap',
+  'duration_min',
+]);
+function updateEvent(id, fields) {
+  const entries = Object.entries(fields).filter(([k]) => UPDATABLE_COLUMNS.has(k));
+  if (!entries.length) return getEvent(id);
+  const sets = entries.map(([k]) => `${k} = ?`);
+  const values = entries.map(([, v]) => (v === undefined ? null : v));
+  if (entries.some(([k]) => k === 'start_ts')) sets.push('reminder_sent = 0');
+  db.prepare(`UPDATE events SET ${sets.join(', ')} WHERE id = ?`).run(...values, id);
+  return getEvent(id);
+}
+
 const deleteEventStmt = db.prepare('DELETE FROM events WHERE id = ?');
 const deleteSignupsForEventStmt = db.prepare('DELETE FROM signups WHERE event_id = ?');
 function deleteEvent(id) {
@@ -207,6 +230,7 @@ module.exports = {
   getEventByMessage,
   setEventMessage,
   setEventStatus,
+  updateEvent,
   deleteEvent,
   getDueReminders,
   markReminderSent,

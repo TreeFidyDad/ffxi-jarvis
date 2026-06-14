@@ -4,11 +4,14 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require('discord.js');
 
-const { ROLES, EXTRA_STATUSES, STATUS } = require('../data/roles');
+const { ROLES, EXTRA_STATUSES, ROLE_GROUPS, STATUS } = require('../data/roles');
 const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
-const { discordTime, discordRelative, googleCalendarLink } = require('./time');
+const { discordTime, discordRelative, googleCalendarLink, formatLocalParts } = require('./time');
 const { jobEmojiMention, jobEmojiComponent } = require('./guildEmojis');
 
 // ---- Component custom IDs --------------------------------------------------
@@ -17,6 +20,8 @@ const ID = {
   STATUS_PREFIX: 'evt:status:', // evt:status:<statusKey>
   LEAVE: 'evt:leave',
   JOB_SELECT: 'evt:job',
+  EDIT: 'evt:edit',
+  EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
 };
 
 const ROLE_EMOJI = Object.fromEntries(ROLES.map((r) => [r.key, r.emoji]));
@@ -45,9 +50,10 @@ function buildEmbed(event, signups) {
 
   // ---- Header / description block ----
   const cap = event.cap || 0;
-  const roleCounts = ROLES.map(
-    (r) => `${r.emoji} ${r.label} **${attending.filter((s) => s.role === r.key).length}**`,
-  ).join('   ');
+  const roleCounts = ROLE_GROUPS.map((g) => {
+    const n = attending.filter((s) => g.keys.includes(s.role)).length;
+    return `${g.emoji} ${g.label} **${n}**`;
+  }).join('   ');
   const head = (cap ? Math.min(attending.length, cap) : attending.length) + (cap ? `/${cap}` : '');
   const tentSuffix = tentative.length ? ` (+${tentative.length})` : '';
 
@@ -174,7 +180,67 @@ function buildComponents(event) {
       ),
   );
 
-  return [roleRow, statusRow, jobRow];
+  const manageRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(ID.EDIT)
+      .setLabel('Edit Event')
+      .setEmoji('✏️')
+      .setStyle(ButtonStyle.Secondary),
+  );
+
+  return [roleRow, statusRow, jobRow, manageRow];
+}
+
+// Modal shown to the creator/leader to edit the headline event fields.
+function buildEditModal(event) {
+  const { date, time } = formatLocalParts(event.start_ts, event.timezone);
+
+  const titleInput = new TextInputBuilder()
+    .setCustomId('title')
+    .setLabel('Title')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100)
+    .setValue(event.title ?? '');
+
+  const dateInput = new TextInputBuilder()
+    .setCustomId('date')
+    .setLabel(`Date (YYYY-MM-DD, ${event.timezone})`)
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setValue(date);
+
+  const timeInput = new TextInputBuilder()
+    .setCustomId('time')
+    .setLabel('Time (e.g. 13:00, 5:30pm, 5pm)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setValue(time);
+
+  const capInput = new TextInputBuilder()
+    .setCustomId('cap')
+    .setLabel('Attendee cap (blank = unlimited)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setValue(event.cap != null ? String(event.cap) : '');
+
+  const leaderInput = new TextInputBuilder()
+    .setCustomId('leader')
+    .setLabel('Leader (blank to clear)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setValue(event.leader ?? '');
+
+  return new ModalBuilder()
+    .setCustomId(`${ID.EDIT_MODAL_PREFIX}${event.id}`)
+    .setTitle(`Edit Event #${event.id}`)
+    .addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(dateInput),
+      new ActionRowBuilder().addComponents(timeInput),
+      new ActionRowBuilder().addComponents(capInput),
+      new ActionRowBuilder().addComponents(leaderInput),
+    );
 }
 
 function buildEventMessage(event, signups) {
@@ -184,4 +250,4 @@ function buildEventMessage(event, signups) {
   };
 }
 
-module.exports = { ID, buildEventMessage };
+module.exports = { ID, buildEventMessage, buildEditModal };

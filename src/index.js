@@ -1,14 +1,25 @@
-const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } = require('discord.js');
 
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
-const { ID, buildEventMessage } = require('./lib/embed');
+const { ID, buildEventMessage, buildEditModal } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
+const { parseEventTime } = require('./lib/time');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildExpressions] });
+
+// Only the event creator, or a member with Manage Events / Manage Server, may edit.
+function canManageEvent(interaction, event) {
+  if (event && interaction.user.id === event.creator_id) return true;
+  return (
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageEvents) ||
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
+    false
+  );
+}
 
 // Re-render the event message after a signup change.
 async function refreshEventMessage(interaction, event) {
@@ -26,6 +37,18 @@ async function handleComponent(interaction) {
   }
   if (event.status === 'closed') {
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: '🔒 Signups are closed for this event.' });
+  }
+
+  // Edit button -> open a modal (creator/leader only). Show it before any other
+  // awaits so we stay inside Discord's 3s window for showModal.
+  if (interaction.customId === ID.EDIT) {
+    if (!canManageEvent(interaction, event)) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
+      });
+    }
+    return interaction.showModal(buildEditModal(event));
   }
 
   // Make sure this guild's custom job emojis are loaded before we re-render.
@@ -74,12 +97,86 @@ async function handleComponent(interaction) {
   return interaction.deferUpdate();
 }
 
+// Handle the Edit Event modal submission.
+async function handleEditModal(interaction) {
+  const eventId = Number(interaction.customId.slice(ID.EDIT_MODAL_PREFIX.length));
+  const event = db.getEvent(eventId);
+  if (!event) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⚠️ This event is no longer tracked by the bot.',
+    });
+  }
+  if (!canManageEvent(interaction, event)) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
+    });
+  }
+
+  const title = interaction.fields.getTextInputValue('title').trim();
+  const date = interaction.fields.getTextInputValue('date').trim();
+  const time = interaction.fields.getTextInputValue('time').trim();
+  const capRaw = interaction.fields.getTextInputValue('cap').trim();
+  const leaderRaw = interaction.fields.getTextInputValue('leader').trim();
+
+  if (!title) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Title cannot be empty.' });
+  }
+
+  const parsed = parseEventTime(date, time, event.timezone);
+  if (!parsed.ok) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ ${parsed.error}` });
+  }
+
+  let cap = null;
+  if (capRaw !== '') {
+    const n = Number.parseInt(capRaw, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 99) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: '⚠️ Cap must be a whole number from 1–99, or left blank for unlimited.',
+      });
+    }
+    cap = n;
+  }
+
+  db.updateEvent(eventId, {
+    title,
+    start_ts: parsed.ts,
+    cap,
+    leader: leaderRaw || null,
+  });
+
+  const updated = db.getEvent(eventId);
+  await ensureGuildEmojis(client, updated.guild_id);
+
+  const channel = await client.channels.fetch(updated.channel_id).catch(() => null);
+  const message = updated.message_id
+    ? await channel?.messages.fetch(updated.message_id).catch(() => null)
+    : null;
+  if (message) {
+    await message.edit(buildEventMessage(updated, db.getSignups(eventId))).catch(() => null);
+  }
+
+  return interaction.reply({
+    flags: MessageFlags.Ephemeral,
+    content: `✅ Updated event **#${eventId}**.`,
+  });
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === 'event') {
         if (interaction.guildId) await ensureGuildEmojis(client, interaction.guildId);
         await eventCommand.execute(interaction);
+      }
+      return;
+    }
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith(ID.EDIT_MODAL_PREFIX)) {
+        await handleEditModal(interaction);
       }
       return;
     }
