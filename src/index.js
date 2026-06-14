@@ -6,8 +6,9 @@ const eventCommand = require('./commands/event');
 const { ID, buildEventMessage } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
+const { ensureGuildEmojis } = require('./lib/guildEmojis');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildExpressions] });
 
 // Re-render the event message after a signup change.
 async function refreshEventMessage(interaction, event) {
@@ -26,6 +27,9 @@ async function handleComponent(interaction) {
   if (event.status === 'closed') {
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: '🔒 Signups are closed for this event.' });
   }
+
+  // Make sure this guild's custom job emojis are loaded before we re-render.
+  await ensureGuildEmojis(client, event.guild_id);
 
   const userId = interaction.user.id;
   const username = interaction.member?.displayName || interaction.user.username;
@@ -74,6 +78,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
       if (interaction.commandName === 'event') {
+        if (interaction.guildId) await ensureGuildEmojis(client, interaction.guildId);
         await eventCommand.execute(interaction);
       }
       return;
@@ -117,12 +122,25 @@ async function checkReminders() {
   }
 }
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
+  for (const guild of c.guilds.cache.values()) {
+    try {
+      await ensureGuildEmojis(client, guild.id, true);
+    } catch (err) {
+      console.error(`Failed to index emojis for guild ${guild.id}:`, err);
+    }
+  }
   if (config.reminderMinutes > 0) {
     setInterval(checkReminders, 60 * 1000);
     console.log(`Reminders enabled: ${config.reminderMinutes} minute(s) before start.`);
   }
+});
+
+// Refresh the cache whenever a guild's emojis change.
+client.on(Events.GuildEmojisUpdate, (emojis, guild) => {
+  const id = guild?.id || emojis?.first()?.guild?.id;
+  if (id) ensureGuildEmojis(client, id, true).catch(() => null);
 });
 
 client.login(config.token);

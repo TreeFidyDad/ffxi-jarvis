@@ -9,6 +9,7 @@ const {
 const { ROLES, EXTRA_STATUSES, STATUS } = require('../data/roles');
 const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
 const { discordTime, discordRelative, googleCalendarLink } = require('./time');
+const { jobEmojiMention, jobEmojiComponent } = require('./guildEmojis');
 
 // ---- Component custom IDs --------------------------------------------------
 const ID = {
@@ -78,8 +79,9 @@ function buildEmbed(event, signups) {
   for (const job of JOBS) {
     const members = main.filter((s) => s.job === job.code);
     if (!members.length) continue;
+    const emoji = jobEmojiMention(event.guild_id, job.code) || job.emoji;
     embed.addFields({
-      name: `${job.emoji} ${jobName(job.code)} (${members.length})`,
+      name: `${emoji} ${jobName(job.code)} (${members.length})`,
       value: members.map((s) => formatMember(s, slot.get(s.user_id))).join('\n'),
       inline: true,
     });
@@ -162,7 +164,14 @@ function buildComponents(event) {
     new StringSelectMenuBuilder()
       .setCustomId(ID.JOB_SELECT)
       .setPlaceholder('Select your Job')
-      .addOptions(JOBS.map((j) => ({ label: `${j.name} (${j.code})`, value: j.code }))),
+      .addOptions(
+        JOBS.map((j) => {
+          const option = { label: `${j.name} (${j.code})`, value: j.code };
+          const custom = jobEmojiComponent(event.guild_id, j.code);
+          if (custom) option.emoji = custom;
+          return option;
+        }),
+      ),
   );
 
   return [roleRow, statusRow, jobRow];
