@@ -1,6 +1,6 @@
-# FFXI Raid Helper
+# FFXI Jarvis
 
-A **free, open-source, self-hostable** Discord bot for organizing Final Fantasy XI events — a no-paywall alternative to Raid-Helper.
+A **free, open-source, self-hostable** Discord bot for organizing Final Fantasy XI events — a no-paywall alternative to Raid-Helper. Your linkshell's own event butler.
 
 Members sign up straight from a message with buttons: they pick a **role** (Tank / Melee DPS / Ranged DPS / Support) and their **Job** (WAR, WHM, PLD, … all 22 jobs) from a dropdown. The roster updates live and event times are shown in each member's own local timezone.
 
@@ -36,7 +36,7 @@ Members sign up straight from a message with buttons: they pick a **role** (Tank
 
 ```bash
 git clone <your-repo-url>
-cd ffxi-raid-helper
+cd ffxi-jarvis
 npm install
 cp .env.example .env   # on Windows: copy .env.example .env
 ```
@@ -92,7 +92,7 @@ Keep the `data/` directory (or your `DATABASE_PATH`) on persistent storage so ev
 | `GUILD_ID` | _(blank)_ | Register commands to one server instantly; blank = global. |
 | `DEFAULT_TIMEZONE` | `America/New_York` | IANA timezone used when `/event create` omits one. |
 | `REMINDER_MINUTES` | `15` | Minutes before start to ping attendees. `0` disables reminders. |
-| `DATABASE_PATH` | `data/ffxi-raid-helper.db` | SQLite file location. |
+| `DATABASE_PATH` | `data/ffxi-jarvis.db` | SQLite file location. |
 
 ## License
 

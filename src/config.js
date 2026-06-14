@@ -16,7 +16,7 @@ const config = {
   guildId: process.env.GUILD_ID || null,
   defaultTimezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
   reminderMinutes: Number.parseInt(process.env.REMINDER_MINUTES ?? '15', 10) || 0,
-  databasePath: process.env.DATABASE_PATH || 'data/ffxi-raid-helper.db',
+  databasePath: process.env.DATABASE_PATH || 'data/ffxi-jarvis.db',
 };
 
 module.exports = config;

@@ -60,7 +60,7 @@ async function execute(interaction) {
     return interaction.reply({
       flags: MessageFlags.Ephemeral,
       content: [
-        '**FFXI Raid Helper**',
+        '**FFXI Jarvis**',
         '• `/event create title:<...> date:YYYY-MM-DD time:HH:MM` — post an event.',
         '• Members sign up with the buttons: pick a **role** (Tank / Melee / Ranged / Support) and a **Job** from the dropdown.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
