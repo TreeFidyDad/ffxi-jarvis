@@ -78,9 +78,10 @@ function buildEmbed(event, signups) {
   }
 
   const total = attending.length;
-  embed.setFooter({
-    text: `Event #${event.id} • ${total} attending • created by signup buttons below`,
-  });
+  const footer = event.status === 'closed'
+    ? `Event #${event.id} • ${total} attending • signups closed`
+    : `Event #${event.id} • ${total} attending • sign up with the buttons below`;
+  embed.setFooter({ text: footer });
 
   return embed;
 }
