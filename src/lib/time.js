@@ -1,17 +1,31 @@
 const { DateTime } = require('luxon');
 
 // Parse a wall-clock date + time in a given IANA timezone into a UTC unix timestamp (seconds).
+// Accepts 24-hour (17:30, 5:30) and 12-hour (5:30pm, 5pm, 5:30 PM) time formats.
 // Returns { ok: true, ts } or { ok: false, error }.
+const TIME_FORMATS = ['HH:mm', 'H:mm', 'h:mma', 'h:mm a', 'ha', 'h a', 'hmma'];
+
 function parseEventTime(date, time, timezone) {
   if (!DateTime.local().setZone(timezone).isValid) {
     return { ok: false, error: `Unknown timezone \`${timezone}\`. Use an IANA name like \`America/New_York\`.` };
   }
 
-  const dt = DateTime.fromFormat(`${date} ${time}`, 'yyyy-MM-dd HH:mm', { zone: timezone });
-  if (!dt.isValid) {
+  // Normalize: drop internal spaces around am/pm and uppercase the meridiem so
+  // "5:30 pm", "5:30PM" and "5:30pm" all parse the same way.
+  const cleanTime = String(time).trim().replace(/\s+/g, '').toLowerCase();
+
+  let dt;
+  for (const fmt of TIME_FORMATS) {
+    dt = DateTime.fromFormat(`${date} ${cleanTime}`, `yyyy-MM-dd ${fmt}`, { zone: timezone });
+    if (dt.isValid) break;
+  }
+
+  if (!dt || !dt.isValid) {
     return {
       ok: false,
-      error: `Could not read that date/time. Use date \`YYYY-MM-DD\` and time \`HH:MM\` (24h). (${dt.invalidReason || 'invalid'})`,
+      error:
+        'Could not read that date/time. Use date `YYYY-MM-DD` (e.g. `2026-06-27`) and a time ' +
+        'like `13:00`, `5:30pm`, or `5pm`.',
     };
   }
 

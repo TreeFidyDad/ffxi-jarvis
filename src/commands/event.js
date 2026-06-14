@@ -21,7 +21,7 @@ const data = new SlashCommandBuilder()
         o.setName('date').setDescription('Date as YYYY-MM-DD').setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('time').setDescription('Start time as HH:MM (24-hour)').setRequired(true),
+        o.setName('time').setDescription('Start time, e.g. 13:00, 5:30pm, or 5pm').setRequired(true),
       )
       .addStringOption((o) =>
         o.setName('description').setDescription('Optional details / notes').setRequired(false),
