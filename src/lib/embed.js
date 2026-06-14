@@ -61,19 +61,17 @@ function buildEmbed(event, signups) {
   if (event.url) lines.push(event.url);
   if (event.description) lines.push(event.description);
   lines.push('');
-  if (event.leader || event.creator_name) {
-    lines.push(`🏳️ **Leader:** ${event.leader || event.creator_name}`);
-  }
-  lines.push(`🕒 ${discordTime(event.start_ts)} (${discordRelative(event.start_ts)})`);
+
+  // Compact meta chip row: leader · date · time · countdown.
+  const metaBits = [];
+  if (event.leader || event.creator_name) metaBits.push(`🏳️ **${event.leader || event.creator_name}**`);
+  metaBits.push(`📅 ${discordTime(event.start_ts, 'D')}`);
+  metaBits.push(`🕒 ${discordTime(event.start_ts, 't')}`);
+  metaBits.push(`⏳ ${discordRelative(event.start_ts)}`);
+  lines.push(metaBits.join('  •  '));
+
   lines.push(`👥 **${head}** signed up${tentSuffix}`);
   lines.push(roleCounts);
-  const gcal = googleCalendarLink({
-    title: event.title,
-    startTs: event.start_ts,
-    durationMin: event.duration_min || 120,
-    details: event.url || event.description || undefined,
-  });
-  lines.push(`📅 [Add to Google Calendar](${gcal})`);
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
@@ -113,22 +111,31 @@ function buildEmbed(event, signups) {
     });
   }
 
-  if (tentative.length) {
-    embed.addFields({
-      name: `❔ Tentative (${tentative.length})`,
-      value: tentative
-        .map((s) => `${formatMember(s, slot.get(s.user_id))} \`${jobLabel(s.job)}\``)
-        .join('\n'),
-      inline: false,
-    });
+  // ---- Tentative / Absence: compact single-line lists ----
+  const inlineList = (arr) =>
+    arr.map((s) => `\`${slot.get(s.user_id)}\` ${s.username}`).join(', ');
+  const statusBlock = [];
+  if (tentative.length) statusBlock.push(`❔ **Tentative (${tentative.length}):** ${inlineList(tentative)}`);
+  if (absence.length) statusBlock.push(`❌ **Absence (${absence.length}):** ${inlineList(absence)}`);
+  if (statusBlock.length) {
+    embed.addFields({ name: '\u200b', value: statusBlock.join('\n'), inline: false });
   }
-  if (absence.length) {
-    embed.addFields({
-      name: `❌ Absence (${absence.length})`,
-      value: absence.map((s) => `\`${String(slot.get(s.user_id)).padStart(2, ' ')}\` ${s.username}`).join('\n'),
-      inline: false,
-    });
+
+  // ---- Footer link row (Web View | Gcal) ----
+  const gcal = googleCalendarLink({
+    title: event.title,
+    startTs: event.start_ts,
+    durationMin: event.duration_min || 120,
+    details: event.url || event.description || undefined,
+  });
+  const linkBits = [];
+  if (event.message_id) {
+    linkBits.push(
+      `[Web View](https://discord.com/channels/${event.guild_id}/${event.channel_id}/${event.message_id})`,
+    );
   }
+  linkBits.push(`[Add to Google Calendar](${gcal})`);
+  embed.addFields({ name: '\u200b', value: linkBits.join('  |  '), inline: false });
 
   const footer = closed
     ? `Event #${event.id} • ${attending.length} attending • signups closed`
