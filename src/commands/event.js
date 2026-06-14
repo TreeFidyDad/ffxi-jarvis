@@ -31,6 +31,31 @@ const data = new SlashCommandBuilder()
           .setName('timezone')
           .setDescription('IANA timezone, e.g. America/New_York (defaults to bot setting)')
           .setRequired(false),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('cap')
+          .setDescription('Max attendees; extras go to Standby')
+          .setMinValue(1)
+          .setMaxValue(99)
+          .setRequired(false),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('duration')
+          .setDescription('Length in minutes (default 120, used for the calendar link)')
+          .setMinValue(15)
+          .setMaxValue(1440)
+          .setRequired(false),
+      )
+      .addStringOption((o) =>
+        o.setName('leader').setDescription('Event leader/organizer name (defaults to you)').setRequired(false),
+      )
+      .addStringOption((o) =>
+        o.setName('url').setDescription('Link shown on the title (e.g. a wiki page)').setRequired(false),
+      )
+      .addStringOption((o) =>
+        o.setName('image').setDescription('Image/banner URL shown at the bottom').setRequired(false),
       ),
   )
   .addSubcommand((sub) =>
@@ -60,11 +85,14 @@ async function execute(interaction) {
     return interaction.reply({
       flags: MessageFlags.Ephemeral,
       content: [
-        '**FFXI Jarvis**',
+        '**FFXI Jarvis** — event signups',
         '• `/event create title:<...> date:YYYY-MM-DD time:HH:MM` — post an event.',
+        '   Optional: `description` `timezone` `cap` (max attendees → Standby) `duration` (mins) `leader` `url` `image`.',
         '• Members sign up with the buttons: pick a **role** (Tank / Melee / Ranged / Support) and a **Job** from the dropdown.',
+        '• The roster groups attendees by **Job**, numbers them in signup order, and shows a role summary + headcount.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
+        '• Each event includes an **Add to Google Calendar** link.',
         `• Times are shown in each member's local timezone automatically. Default timezone: \`${config.defaultTimezone}\`.`,
       ].join('\n'),
     });
@@ -76,6 +104,21 @@ async function execute(interaction) {
     const time = interaction.options.getString('time');
     const description = interaction.options.getString('description');
     const timezone = interaction.options.getString('timezone') || config.defaultTimezone;
+    const cap = interaction.options.getInteger('cap');
+    const durationMin = interaction.options.getInteger('duration') || 120;
+    const leader =
+      interaction.options.getString('leader') ||
+      interaction.member?.displayName ||
+      interaction.user.username;
+    const url = interaction.options.getString('url');
+    const imageUrl = interaction.options.getString('image');
+
+    if (url && !/^https?:\/\//i.test(url)) {
+      return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ `url` must start with http:// or https://' });
+    }
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+      return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ `image` must start with http:// or https://' });
+    }
 
     const parsed = parseEventTime(date, time, timezone);
     if (!parsed.ok) {
@@ -86,10 +129,16 @@ async function execute(interaction) {
       guildId: interaction.guildId,
       channelId: interaction.channelId,
       creatorId: interaction.user.id,
+      creatorName: interaction.member?.displayName || interaction.user.username,
+      leader,
       title,
       description,
       startTs: parsed.ts,
       timezone,
+      url,
+      imageUrl,
+      cap,
+      durationMin,
     });
 
     const payload = buildEventMessage(event, []);

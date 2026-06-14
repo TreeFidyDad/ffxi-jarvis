@@ -22,4 +22,17 @@ function parseEventTime(date, time, timezone) {
 const discordTime = (ts, style = 'F') => `<t:${ts}:${style}>`;
 const discordRelative = (ts) => `<t:${ts}:R>`;
 
-module.exports = { parseEventTime, discordTime, discordRelative };
+// Build a "Add to Google Calendar" link. startTs in unix seconds, duration in minutes.
+function googleCalendarLink({ title, startTs, durationMin = 120, details, location }) {
+  const fmt = (s) => DateTime.fromSeconds(s, { zone: 'utc' }).toFormat("yyyyLLdd'T'HHmmss'Z'");
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title || 'Event',
+    dates: `${fmt(startTs)}/${fmt(startTs + durationMin * 60)}`,
+  });
+  if (details) params.set('details', details);
+  if (location) params.set('location', location);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+module.exports = { parseEventTime, discordTime, discordRelative, googleCalendarLink };

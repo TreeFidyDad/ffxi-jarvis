@@ -7,8 +7,8 @@ const {
 } = require('discord.js');
 
 const { ROLES, EXTRA_STATUSES, STATUS } = require('../data/roles');
-const { JOBS, jobLabel } = require('../data/jobs');
-const { discordTime, discordRelative } = require('./time');
+const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
+const { discordTime, discordRelative, googleCalendarLink } = require('./time');
 
 // ---- Component custom IDs --------------------------------------------------
 const ID = {
@@ -18,46 +18,89 @@ const ID = {
   JOB_SELECT: 'evt:job',
 };
 
-function formatSignup(s) {
-  const job = s.job ? `\`${jobLabel(s.job)}\`` : '`???`';
-  return `${job} ${s.username}`;
+const ROLE_EMOJI = Object.fromEntries(ROLES.map((r) => [r.key, r.emoji]));
+
+// "`3` ⚔️ Name" — slot number, role emoji, display name.
+function formatMember(s, slot) {
+  const roleIcon = s.role ? `${ROLE_EMOJI[s.role]} ` : '';
+  return `\`${String(slot).padStart(2, ' ')}\` ${roleIcon}${s.username}`;
 }
 
 function buildEmbed(event, signups) {
   const attending = signups.filter((s) => s.status === STATUS.ATTENDING);
   const tentative = signups.filter((s) => s.status === STATUS.TENTATIVE);
   const absence = signups.filter((s) => s.status === STATUS.ABSENCE);
-
   const closed = event.status === 'closed';
+
+  // Stable slot number per user, in signup order across all statuses.
+  const slot = new Map();
+  signups.forEach((s, i) => slot.set(s.user_id, i + 1));
 
   const embed = new EmbedBuilder()
     .setTitle(`${closed ? '🔒 ' : '📅 '}${event.title}`)
     .setColor(closed ? 0x95a5a6 : 0x5865f2);
+  if (event.url) embed.setURL(event.url);
+  if (event.image_url) embed.setImage(event.image_url);
 
-  const descParts = [];
-  if (event.description) descParts.push(event.description);
-  descParts.push('');
-  descParts.push(`🕒 ${discordTime(event.start_ts)} (${discordRelative(event.start_ts)})`);
-  if (closed) descParts.push('\n**Signups are closed.**');
-  embed.setDescription(descParts.join('\n'));
+  // ---- Header / description block ----
+  const cap = event.cap || 0;
+  const roleCounts = ROLES.map(
+    (r) => `${r.emoji} ${r.label} **${attending.filter((s) => s.role === r.key).length}**`,
+  ).join('   ');
+  const head = (cap ? Math.min(attending.length, cap) : attending.length) + (cap ? `/${cap}` : '');
+  const tentSuffix = tentative.length ? ` (+${tentative.length})` : '';
 
-  // One field per role, side by side.
-  for (const role of ROLES) {
-    const members = attending.filter((s) => s.role === role.key);
-    const value = members.length ? members.map(formatSignup).join('\n') : '\u200b';
+  const lines = [];
+  if (event.url) lines.push(event.url);
+  if (event.description) lines.push(event.description);
+  lines.push('');
+  if (event.leader || event.creator_name) {
+    lines.push(`🏳️ **Leader:** ${event.leader || event.creator_name}`);
+  }
+  lines.push(`🕒 ${discordTime(event.start_ts)} (${discordRelative(event.start_ts)})`);
+  lines.push(`👥 **${head}** signed up${tentSuffix}`);
+  lines.push(roleCounts);
+  const gcal = googleCalendarLink({
+    title: event.title,
+    startTs: event.start_ts,
+    durationMin: event.duration_min || 120,
+    details: event.url || event.description || undefined,
+  });
+  lines.push(`📅 [Add to Google Calendar](${gcal})`);
+  if (closed) lines.push('\n**Signups are closed.**');
+  embed.setDescription(lines.join('\n'));
+
+  // ---- Standby split (overflow beyond cap), by signup order ----
+  const main = cap ? attending.slice(0, cap) : attending;
+  const standby = cap ? attending.slice(cap) : [];
+
+  // ---- One column per Job that has attendees ----
+  for (const job of JOBS) {
+    const members = main.filter((s) => s.job === job.code);
+    if (!members.length) continue;
     embed.addFields({
-      name: `${role.emoji} ${role.label} (${members.length})`,
-      value,
+      name: `${job.emoji} ${jobName(job.code)} (${members.length})`,
+      value: members.map((s) => formatMember(s, slot.get(s.user_id))).join('\n'),
       inline: true,
     });
   }
 
-  // Attending but no role picked yet.
-  const noRole = attending.filter((s) => !s.role);
-  if (noRole.length) {
+  // Attending but no Job chosen yet.
+  const noJob = main.filter((s) => !s.job);
+  if (noJob.length) {
     embed.addFields({
-      name: `📝 Attending — pick a role (${noRole.length})`,
-      value: noRole.map(formatSignup).join('\n'),
+      name: `❔ No Job selected (${noJob.length})`,
+      value: noJob.map((s) => formatMember(s, slot.get(s.user_id))).join('\n'),
+      inline: true,
+    });
+  }
+
+  if (standby.length) {
+    embed.addFields({
+      name: `🪑 Standby (${standby.length})`,
+      value: standby
+        .map((s) => `${formatMember(s, slot.get(s.user_id))} \`${jobLabel(s.job)}\``)
+        .join('\n'),
       inline: false,
     });
   }
@@ -65,22 +108,23 @@ function buildEmbed(event, signups) {
   if (tentative.length) {
     embed.addFields({
       name: `❔ Tentative (${tentative.length})`,
-      value: tentative.map(formatSignup).join('\n'),
+      value: tentative
+        .map((s) => `${formatMember(s, slot.get(s.user_id))} \`${jobLabel(s.job)}\``)
+        .join('\n'),
       inline: false,
     });
   }
   if (absence.length) {
     embed.addFields({
       name: `❌ Absence (${absence.length})`,
-      value: absence.map((s) => s.username).join('\n'),
+      value: absence.map((s) => `\`${String(slot.get(s.user_id)).padStart(2, ' ')}\` ${s.username}`).join('\n'),
       inline: false,
     });
   }
 
-  const total = attending.length;
-  const footer = event.status === 'closed'
-    ? `Event #${event.id} • ${total} attending • signups closed`
-    : `Event #${event.id} • ${total} attending • sign up with the buttons below`;
+  const footer = closed
+    ? `Event #${event.id} • ${attending.length} attending • signups closed`
+    : `Event #${event.id} • ${attending.length} attending • sign up with the buttons below`;
   embed.setFooter({ text: footer });
 
   return embed;

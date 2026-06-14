@@ -5,8 +5,11 @@ A **free, open-source, self-hostable** Discord bot for organizing Final Fantasy 
 Members sign up straight from a message with buttons: they pick a **role** (Tank / Melee DPS / Ranged DPS / Support) and their **Job** (WAR, WHM, PLD, … all 22 jobs) from a dropdown. The roster updates live and event times are shown in each member's own local timezone.
 
 - 🆓 MIT licensed, no premium tiers, host it yourself
-- 🗡️ FFXI Jobs + Tank / Melee / Ranged / Support roles
-- 🟢 Live roster grouped by role, with counts
+- 🗡️ FFXI Jobs (all 22, each with an icon) + Tank / Melee / Ranged / Support roles
+- 🟢 Live roster **grouped by Job**, with per-member signup numbers
+- 🧭 Role-summary line + 👥 headcount (with optional attendee **cap** and **Standby** overflow)
+- 🏳️ Event **leader**, optional **title link** and **image/banner**
+- 📅 One-click **Add to Google Calendar** link
 - ❔ Tentative / ❌ Absence / 🚪 Withdraw
 - 🕒 Per-viewer local times (Discord timestamps)
 - 🔔 Optional reminder ping before the event starts
@@ -61,7 +64,7 @@ npm start
 
 | Command | What it does |
 | --- | --- |
-| `/event create title:<…> date:YYYY-MM-DD time:HH:MM [description:] [timezone:]` | Posts an event with signup buttons. |
+| `/event create title:<…> date:YYYY-MM-DD time:HH:MM [description:] [timezone:] [cap:] [duration:] [leader:] [url:] [image:]` | Posts an event with signup buttons. `cap` limits attendees (extras go to **Standby**); `duration` (minutes) feeds the calendar link; `url` links the title; `image` adds a banner. |
 | `/event close id:<#>` | Locks signups (keeps the roster). |
 | `/event delete id:<#>` | Deletes the event and its roster. |
 | `/event help` | Quick usage reference. |

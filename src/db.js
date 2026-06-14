@@ -41,24 +41,71 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_signups_event ON signups(event_id);
 `);
 
+// ---- Lightweight migrations (idempotent) -----------------------------------
+function tableColumns(table) {
+  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+}
+
+function addColumnIfMissing(table, column, definition) {
+  if (!tableColumns(table).has(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+// Newer event metadata.
+addColumnIfMissing('events', 'creator_name', 'TEXT');
+addColumnIfMissing('events', 'leader', 'TEXT');
+addColumnIfMissing('events', 'url', 'TEXT');
+addColumnIfMissing('events', 'image_url', 'TEXT');
+addColumnIfMissing('events', 'cap', 'INTEGER');
+addColumnIfMissing('events', 'duration_min', 'INTEGER NOT NULL DEFAULT 120');
+
+// Immutable signup order used for stable slot numbers. Backfill existing rows.
+if (!tableColumns('signups').has('created_at')) {
+  db.exec('ALTER TABLE signups ADD COLUMN created_at INTEGER');
+  db.exec('UPDATE signups SET created_at = updated_at WHERE created_at IS NULL');
+}
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
 
 const insertEventStmt = db.prepare(`
-  INSERT INTO events (guild_id, channel_id, creator_id, title, description, start_ts, timezone, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events
+    (guild_id, channel_id, creator_id, creator_name, leader, title, description,
+     start_ts, timezone, url, image_url, cap, duration_min, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
-function createEvent({ guildId, channelId, creatorId, title, description, startTs, timezone }) {
+function createEvent({
+  guildId,
+  channelId,
+  creatorId,
+  creatorName,
+  leader,
+  title,
+  description,
+  startTs,
+  timezone,
+  url,
+  imageUrl,
+  cap,
+  durationMin,
+}) {
   const result = insertEventStmt.run(
     guildId,
     channelId,
     creatorId,
+    creatorName ?? null,
+    leader ?? null,
     title,
     description ?? null,
     startTs,
     timezone,
+    url ?? null,
+    imageUrl ?? null,
+    cap ?? null,
+    durationMin ?? 120,
     now(),
   );
   return getEvent(Number(result.lastInsertRowid));
@@ -116,14 +163,17 @@ function getSignup(eventId, userId) {
   return getSignupStmt.get(eventId, userId) || null;
 }
 
-const getSignupsStmt = db.prepare('SELECT * FROM signups WHERE event_id = ? ORDER BY updated_at ASC');
+// Stable order: by first-signup time, falling back to updated_at for legacy rows.
+const getSignupsStmt = db.prepare(
+  'SELECT * FROM signups WHERE event_id = ? ORDER BY COALESCE(created_at, updated_at) ASC, rowid ASC',
+);
 function getSignups(eventId) {
   return getSignupsStmt.all(eventId);
 }
 
 const upsertSignupStmt = db.prepare(`
-  INSERT INTO signups (event_id, user_id, username, role, job, status, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO signups (event_id, user_id, username, role, job, status, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(event_id, user_id) DO UPDATE SET
     username   = excluded.username,
     role       = excluded.role,
@@ -133,12 +183,15 @@ const upsertSignupStmt = db.prepare(`
 `);
 
 // Merge `changes` (role/job/status) onto any existing signup for this user.
+// created_at is set once on first signup and never changed (stable slot order).
 function upsertSignup(eventId, userId, username, changes) {
   const existing = getSignup(eventId, userId);
   const role = changes.role !== undefined ? changes.role : existing?.role ?? null;
   const job = changes.job !== undefined ? changes.job : existing?.job ?? null;
   const status = changes.status !== undefined ? changes.status : existing?.status ?? 'attending';
-  upsertSignupStmt.run(eventId, userId, username, role, job, status, now());
+  const ts = now();
+  const createdAt = existing?.created_at ?? ts;
+  upsertSignupStmt.run(eventId, userId, username, role, job, status, createdAt, ts);
   return getSignup(eventId, userId);
 }
 
