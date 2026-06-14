@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } =
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
-const { ID, buildEventMessage, buildEditModal } = require('./lib/embed');
+const { ID, buildEventMessage, buildEditModal, buildEditLinksModal } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -49,6 +49,17 @@ async function handleComponent(interaction) {
       });
     }
     return interaction.showModal(buildEditModal(event));
+  }
+
+  // Edit Links/Image button -> open the links modal (creator/leader only).
+  if (interaction.customId === ID.EDIT_LINKS) {
+    if (!canManageEvent(interaction, event)) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
+      });
+    }
+    return interaction.showModal(buildEditLinksModal(event));
   }
 
   // Make sure this guild's custom job emojis are loaded before we re-render.
@@ -148,9 +159,19 @@ async function handleEditModal(interaction) {
     leader: leaderRaw || null,
   });
 
-  const updated = db.getEvent(eventId);
-  await ensureGuildEmojis(client, updated.guild_id);
+  await rerenderEvent(eventId);
 
+  return interaction.reply({
+    flags: MessageFlags.Ephemeral,
+    content: `✅ Updated event **#${eventId}**.`,
+  });
+}
+
+// Re-fetch an event and re-render its posted message in place.
+async function rerenderEvent(eventId) {
+  const updated = db.getEvent(eventId);
+  if (!updated) return;
+  await ensureGuildEmojis(client, updated.guild_id);
   const channel = await client.channels.fetch(updated.channel_id).catch(() => null);
   const message = updated.message_id
     ? await channel?.messages.fetch(updated.message_id).catch(() => null)
@@ -158,10 +179,47 @@ async function handleEditModal(interaction) {
   if (message) {
     await message.edit(buildEventMessage(updated, db.getSignups(eventId))).catch(() => null);
   }
+}
+
+// Handle the Edit Links/Image modal submission.
+async function handleEditLinksModal(interaction) {
+  const eventId = Number(interaction.customId.slice(ID.EDIT_LINKS_MODAL_PREFIX.length));
+  const event = db.getEvent(eventId);
+  if (!event) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⚠️ This event is no longer tracked by the bot.',
+    });
+  }
+  if (!canManageEvent(interaction, event)) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
+    });
+  }
+
+  const description = interaction.fields.getTextInputValue('description').trim();
+  const url = interaction.fields.getTextInputValue('url').trim();
+  const image = interaction.fields.getTextInputValue('image').trim();
+
+  if (url && !/^https?:\/\//i.test(url)) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Event link must start with http:// or https://' });
+  }
+  if (image && !/^https?:\/\//i.test(image)) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Image URL must start with http:// or https://' });
+  }
+
+  db.updateEvent(eventId, {
+    description: description || null,
+    url: url || null,
+    image_url: image || null,
+  });
+
+  await rerenderEvent(eventId);
 
   return interaction.reply({
     flags: MessageFlags.Ephemeral,
-    content: `✅ Updated event **#${eventId}**.`,
+    content: `✅ Updated links/image for event **#${eventId}**.`,
   });
 }
 
@@ -177,6 +235,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith(ID.EDIT_MODAL_PREFIX)) {
         await handleEditModal(interaction);
+      } else if (interaction.customId.startsWith(ID.EDIT_LINKS_MODAL_PREFIX)) {
+        await handleEditLinksModal(interaction);
       }
       return;
     }

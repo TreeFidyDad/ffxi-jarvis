@@ -22,6 +22,8 @@ const ID = {
   JOB_SELECT: 'evt:job',
   EDIT: 'evt:edit',
   EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
+  EDIT_LINKS: 'evt:editlinks',
+  EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
 };
 
 const ROLE_EMOJI = Object.fromEntries(ROLES.map((r) => [r.key, r.emoji]));
@@ -193,6 +195,11 @@ function buildComponents(event) {
       .setLabel('Edit Event')
       .setEmoji('✏️')
       .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(ID.EDIT_LINKS)
+      .setLabel('Edit Links/Image')
+      .setEmoji('🖼️')
+      .setStyle(ButtonStyle.Secondary),
   );
 
   return [roleRow, statusRow, jobRow, manageRow];
@@ -250,6 +257,40 @@ function buildEditModal(event) {
     );
 }
 
+// Modal for description, event link, and image/banner URL.
+function buildEditLinksModal(event) {
+  const descInput = new TextInputBuilder()
+    .setCustomId('description')
+    .setLabel('Description / notes (blank to clear)')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(1000)
+    .setValue(event.description ?? '');
+
+  const urlInput = new TextInputBuilder()
+    .setCustomId('url')
+    .setLabel('Event link, e.g. a wiki page (blank clears)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setValue(event.url ?? '');
+
+  const imageInput = new TextInputBuilder()
+    .setCustomId('image')
+    .setLabel('Image/banner URL (blank to clear)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setValue(event.image_url ?? '');
+
+  return new ModalBuilder()
+    .setCustomId(`${ID.EDIT_LINKS_MODAL_PREFIX}${event.id}`)
+    .setTitle(`Edit Links/Image #${event.id}`)
+    .addComponents(
+      new ActionRowBuilder().addComponents(descInput),
+      new ActionRowBuilder().addComponents(urlInput),
+      new ActionRowBuilder().addComponents(imageInput),
+    );
+}
+
 function buildEventMessage(event, signups) {
   return {
     embeds: [buildEmbed(event, signups)],
@@ -257,4 +298,4 @@ function buildEventMessage(event, signups) {
   };
 }
 
-module.exports = { ID, buildEventMessage, buildEditModal };
+module.exports = { ID, buildEventMessage, buildEditModal, buildEditLinksModal };
