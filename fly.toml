@@ -1,0 +1,28 @@
+# fly.toml — Fly.io deployment config for FFXI Jarvis.
+# This bot has no inbound HTTP; it connects out to Discord, so no [http_service]
+# or ports are needed. A small always-on machine with a persistent volume for SQLite.
+
+app = "ffxi-jarvis"
+primary_region = "iad"  # change to a region near you (e.g. lax, ord, sjc)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATABASE_PATH = "/data/ffxi-jarvis.db"
+  DEFAULT_TIMEZONE = "America/New_York"
+  REMINDER_MINUTES = "15"
+
+# Persistent storage so events/signups survive deploys and restarts.
+[mounts]
+  source = "ffxi_jarvis_data"
+  destination = "/data"
+
+# Keep exactly one always-on instance (a Discord gateway bot must not be scaled
+# horizontally, and must not auto-stop).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[deploy]
+  min_machines_running = 1

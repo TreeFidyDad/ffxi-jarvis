@@ -79,12 +79,14 @@ Members then:
 
 ## Free hosting options
 
-This bot is a single lightweight process and stores everything in a local SQLite file, so it runs almost anywhere:
+This bot is a single lightweight process and stores everything in a local SQLite file, so it runs almost anywhere. **See [HOSTING.md](HOSTING.md) for step-by-step guides** covering:
 
-- A spare PC, home server, or Raspberry Pi (`npm start` under `pm2` or a systemd service)
-- Free/low-cost tiers on Fly.io, Railway, or a small VPS
+- **Fly.io** (recommended) — free/cheap cloud, always-on, persistent volume; nothing running at home
+- **Railway** — deploy straight from the GitHub repo
+- **Any Docker host / VPS** — bundled `Dockerfile`
+- **A spare PC or Raspberry Pi** — `pm2` with auto-restart on reboot
 
-Keep the `data/` directory (or your `DATABASE_PATH`) on persistent storage so events survive restarts.
+Keep the `data/` directory (or your `DATABASE_PATH`) on persistent storage so events survive restarts. Run only one instance.
 
 ## Configuration reference
 
