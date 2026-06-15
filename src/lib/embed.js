@@ -12,7 +12,7 @@ const {
 const { ROLES, EXTRA_STATUSES, ROLE_GROUPS, STATUS } = require('../data/roles');
 const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
 const { discordTime, discordRelative, googleCalendarLink, formatLocalParts } = require('./time');
-const { jobEmojiMention, jobEmojiComponent } = require('./guildEmojis');
+const { jobEmojiMention, jobEmojiComponent, roleEmojiMention, roleEmojiComponent } = require('./guildEmojis');
 
 // ---- Component custom IDs --------------------------------------------------
 const ID = {
@@ -27,10 +27,15 @@ const ID = {
 };
 
 const ROLE_EMOJI = Object.fromEntries(ROLES.map((r) => [r.key, r.emoji]));
+const ROLE_GROUP_BY_KEY = Object.fromEntries(ROLES.map((r) => [r.key, r.group]));
 
-// "`3` ⚔️ Name" — slot number, role emoji, display name.
-function formatMember(s, slot) {
-  const roleIcon = s.role ? `${ROLE_EMOJI[s.role]} ` : '';
+// "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
+function formatMember(s, slot, guildId) {
+  let roleIcon = '';
+  if (s.role) {
+    const custom = roleEmojiMention(guildId, ROLE_GROUP_BY_KEY[s.role]);
+    roleIcon = `${custom || ROLE_EMOJI[s.role]} `;
+  }
   return `\`${String(slot).padStart(2, ' ')}\` ${roleIcon}${s.username}`;
 }
 
@@ -54,7 +59,8 @@ function buildEmbed(event, signups) {
   const cap = event.cap || 0;
   const roleCounts = ROLE_GROUPS.map((g) => {
     const n = attending.filter((s) => g.keys.includes(s.role)).length;
-    return `${g.emoji} ${g.label} **${n}**`;
+    const icon = roleEmojiMention(event.guild_id, g.group) || g.emoji;
+    return `${icon} ${g.label} **${n}**`;
   }).join('   ');
   const head = (cap ? Math.min(attending.length, cap) : attending.length) + (cap ? `/${cap}` : '');
   const tentSuffix = tentative.length ? ` (+${tentative.length})` : '';
@@ -88,7 +94,7 @@ function buildEmbed(event, signups) {
     const emoji = jobEmojiMention(event.guild_id, job.code) || job.emoji;
     embed.addFields({
       name: `${emoji} ${jobName(job.code)} (${members.length})`,
-      value: members.map((s) => formatMember(s, slot.get(s.user_id))).join('\n'),
+      value: members.map((s) => formatMember(s, slot.get(s.user_id), event.guild_id)).join('\n'),
       inline: true,
     });
   }
@@ -98,7 +104,7 @@ function buildEmbed(event, signups) {
   if (noJob.length) {
     embed.addFields({
       name: `❔ No Job selected (${noJob.length})`,
-      value: noJob.map((s) => formatMember(s, slot.get(s.user_id))).join('\n'),
+      value: noJob.map((s) => formatMember(s, slot.get(s.user_id), event.guild_id)).join('\n'),
       inline: true,
     });
   }
@@ -107,7 +113,7 @@ function buildEmbed(event, signups) {
     embed.addFields({
       name: `🪑 Standby (${standby.length})`,
       value: standby
-        .map((s) => `${formatMember(s, slot.get(s.user_id))} \`${jobLabel(s.job)}\``)
+        .map((s) => `${formatMember(s, slot.get(s.user_id), event.guild_id)} \`${jobLabel(s.job)}\``)
         .join('\n'),
       inline: false,
     });
@@ -155,7 +161,7 @@ function buildComponents(event) {
       new ButtonBuilder()
         .setCustomId(`${ID.ROLE_PREFIX}${role.key}`)
         .setLabel(role.label)
-        .setEmoji(role.emoji)
+        .setEmoji(roleEmojiComponent(event.guild_id, role.group) || role.emoji)
         .setStyle(ButtonStyle.Primary),
     ),
   );
