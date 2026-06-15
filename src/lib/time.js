@@ -57,4 +57,9 @@ function googleCalendarLink({ title, startTs, durationMin = 120, details, locati
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-module.exports = { parseEventTime, formatLocalParts, discordTime, discordRelative, googleCalendarLink };
+// True if `tz` is a valid IANA timezone name (e.g. America/Los_Angeles).
+function isValidTimezone(tz) {
+  return !!tz && DateTime.local().setZone(tz).isValid;
+}
+
+module.exports = { parseEventTime, isValidTimezone, formatLocalParts, discordTime, discordRelative, googleCalendarLink };

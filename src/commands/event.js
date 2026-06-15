@@ -6,7 +6,7 @@ const {
 
 const config = require('../config');
 const db = require('../db');
-const { parseEventTime } = require('../lib/time');
+const { parseEventTime, isValidTimezone } = require('../lib/time');
 const { buildEventMessage, buildManageComponents } = require('../lib/embed');
 
 const data = new SlashCommandBuilder()
@@ -76,6 +76,17 @@ const data = new SlashCommandBuilder()
       .setDescription('Delete an event and its roster')
       .addIntegerOption((o) => o.setName('id').setDescription('Event ID').setRequired(true)),
   )
+  .addSubcommand((sub) =>
+    sub
+      .setName('timezone')
+      .setDescription('Set your personal timezone, used when you create events')
+      .addStringOption((o) =>
+        o
+          .setName('tz')
+          .setDescription('IANA name, e.g. America/Los_Angeles, America/New_York, Europe/London')
+          .setRequired(true),
+      ),
+  )
   .addSubcommand((sub) => sub.setName('help').setDescription('How to use the bot'));
 
 function canManage(interaction, event) {
@@ -94,14 +105,34 @@ async function execute(interaction) {
         '**FFXI Jarvis** — event signups',
         '• `/event create title:<...> date:YYYY-MM-DD time:HH:MM` — post an event.',
         '   Optional: `description` `timezone` `cap` (max attendees → Standby) `duration` (mins) `leader` `url` `image`.',
-        '• Members sign up with the buttons: pick a **role** (Tank / Melee / Ranged / Support) and a **Job** from the dropdown.',
+        '• Members sign up with the buttons: pick a **role** — Tank, **DPS** (then choose Melee / Physical Ranged / Magical Ranged), or Healer/Support — and a **Job** from the dropdown.',
         '• The roster groups attendees by **Job**, numbers them in signup order, and shows a role summary + headcount.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
         '• `/event manage id:<#>` gives you private **Edit Event** / **Edit Links/Image** buttons (only you can see them).',
+        '• `/event timezone tz:<IANA>` saves **your** timezone, so the times you type when creating are read in your zone.',
         '• Each event includes an **Add to Google Calendar** link.',
-        `• Times are shown in each member's local timezone automatically. Default timezone: \`${config.defaultTimezone}\`.`,
+        `• Times are shown in each member's local timezone automatically. Server default: \`${config.defaultTimezone}\`.`,
       ].join('\n'),
+    });
+  }
+
+  if (sub === 'timezone') {
+    const tz = interaction.options.getString('tz').trim();
+    if (!isValidTimezone(tz)) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content:
+          `⚠️ \`${tz}\` isn't a valid timezone. Use an IANA name, e.g. ` +
+          '`America/Los_Angeles`, `America/Denver`, `America/Chicago`, `America/New_York`, `Europe/London`, `Australia/Sydney`.',
+      });
+    }
+    db.setUserTimezone(interaction.user.id, tz);
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content:
+        `✅ Saved. When **you** create events, times will be interpreted in \`${tz}\`.\n` +
+        'Everyone still sees each event in their own local time automatically.',
     });
   }
 
@@ -110,7 +141,8 @@ async function execute(interaction) {
     const date = interaction.options.getString('date');
     const time = interaction.options.getString('time');
     const description = interaction.options.getString('description');
-    const timezone = interaction.options.getString('timezone') || config.defaultTimezone;
+    const explicitTz = interaction.options.getString('timezone');
+    const timezone = explicitTz || db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
     const cap = interaction.options.getInteger('cap');
     const durationMin = interaction.options.getInteger('duration') || 120;
     const leader =
@@ -131,6 +163,9 @@ async function execute(interaction) {
     if (!parsed.ok) {
       return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ ${parsed.error}` });
     }
+
+    // Remember an explicitly chosen timezone as this user's personal default.
+    if (explicitTz) db.setUserTimezone(interaction.user.id, timezone);
 
     const event = db.createEvent({
       guildId: interaction.guildId,
@@ -168,10 +203,16 @@ async function execute(interaction) {
     }
     db.setEventMessage(event.id, message.id);
 
+    const usedSavedOrExplicit = explicitTz || db.getUserTimezone(interaction.user.id);
+    const tzNote = usedSavedOrExplicit
+      ? `🕒 Times interpreted in your timezone \`${timezone}\`.`
+      : `🕒 Times interpreted in the server default \`${timezone}\`. Set your own with \`/event timezone\`.`;
+
     return interaction.reply({
       flags: MessageFlags.Ephemeral,
       content:
         `✅ Created event **#${event.id}** — ${title}.\n` +
+        `${tzNote}\n` +
         'These **Edit** buttons are private to you. Re-open them anytime with ' +
         `\`/event manage id:${event.id}\`.`,
       components: buildManageComponents(event),

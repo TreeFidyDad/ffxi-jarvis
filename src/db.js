@@ -66,6 +66,15 @@ if (!tableColumns('signups').has('created_at')) {
   db.exec('UPDATE signups SET created_at = updated_at WHERE created_at IS NULL');
 }
 
+// Per-user remembered timezone, so each member's typed event times are
+// interpreted in their own zone (Discord doesn't expose a user's timezone).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id  TEXT PRIMARY KEY,
+    timezone TEXT
+  );
+`);
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
@@ -223,6 +232,21 @@ function removeSignup(eventId, userId) {
   removeSignupStmt.run(eventId, userId);
 }
 
+// ---- User preferences ------------------------------------------------------
+
+const getUserTimezoneStmt = db.prepare('SELECT timezone FROM user_prefs WHERE user_id = ?');
+function getUserTimezone(userId) {
+  return getUserTimezoneStmt.get(userId)?.timezone || null;
+}
+
+const setUserTimezoneStmt = db.prepare(`
+  INSERT INTO user_prefs (user_id, timezone) VALUES (?, ?)
+  ON CONFLICT(user_id) DO UPDATE SET timezone = excluded.timezone
+`);
+function setUserTimezone(userId, timezone) {
+  setUserTimezoneStmt.run(userId, timezone);
+}
+
 module.exports = {
   db,
   createEvent,
@@ -238,4 +262,6 @@ module.exports = {
   getSignups,
   upsertSignup,
   removeSignup,
+  getUserTimezone,
+  setUserTimezone,
 };
