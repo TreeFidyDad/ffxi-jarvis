@@ -6,4 +6,5 @@ node_modules/
 *.db-shm
 /data/
 npm-debug.log*
+bot.log
 .DS_Store
