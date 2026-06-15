@@ -131,21 +131,14 @@ function buildEmbed(event, signups) {
     embed.addFields({ name: '\u200b', value: statusBlock.join('\n'), inline: false });
   }
 
-  // ---- Footer link row (Web View | Gcal) ----
+  // ---- Footer link row (Add to Google Calendar) ----
   const gcal = googleCalendarLink({
     title: event.title,
     startTs: event.start_ts,
     durationMin: event.duration_min || 120,
     details: event.url || event.description || undefined,
   });
-  const linkBits = [];
-  if (event.message_id) {
-    linkBits.push(
-      `[Web View](https://discord.com/channels/${event.guild_id}/${event.channel_id}/${event.message_id})`,
-    );
-  }
-  linkBits.push(`[Add to Google Calendar](${gcal})`);
-  embed.addFields({ name: '\u200b', value: linkBits.join('  |  '), inline: false });
+  embed.addFields({ name: '\u200b', value: `[Add to Google Calendar](${gcal})`, inline: false });
 
   const footer = closed
     ? `Event #${event.id} • ${attending.length} attending • signups closed`
