@@ -27,9 +27,10 @@ function holdersByItem(marks) {
   return map;
 }
 
-// Build the public checklist message: one embed field per god group, each line
-// a ✅/⬜ item plus how many people have it (×N) and who. Each god shows how many
-// times it can be popped = the lowest count among its required pop ingredients.
+// Build the public checklist message. A header embed explains the board, then
+// each god gets its own embed (with artwork thumbnail) listing its items —
+// ✅/⬜ plus how many people have each (×N) and who. Each god's title shows how
+// many times it can be popped = the lowest count among its required pop items.
 function buildPopMessage(list, marks) {
   const template = getTemplate(list.template);
   if (!template) {
@@ -48,7 +49,7 @@ function buildPopMessage(list, marks) {
 
   const totalPops = template.groups.reduce((sum, g) => sum + (popsReady(g) || 0), 0);
 
-  const embed = new EmbedBuilder()
+  const header = new EmbedBuilder()
     .setColor(totalPops > 0 ? 0x2ecc71 : 0x5865f2)
     .setTitle(`${template.emoji} ${list.title}`)
     .setDescription(
@@ -57,6 +58,8 @@ function buildPopMessage(list, marks) {
         `🔁 **Pops ready** = how many times the group can spawn that god right now (limited by the rarest required item).`,
       ].join('\n'),
     );
+
+  const embeds = [header];
 
   for (const group of template.groups) {
     const ready = popsReady(group);
@@ -75,11 +78,17 @@ function buildPopMessage(list, marks) {
       const countBadge = n ? ` \`×${n}\`` : '';
       return `${box} ${label}${tag}${countBadge}${suffix}`;
     });
-    const header = ready === null ? `${group.emoji} ${group.name}` : `${group.emoji} ${group.name} — 🔁 ${ready} ready`;
-    embed.addFields({ name: header, value: lines.join('\n'), inline: false });
+
+    const title = ready === null ? `${group.emoji} ${group.name}` : `${group.emoji} ${group.name} — 🔁 ${ready} ready`;
+    const godEmbed = new EmbedBuilder()
+      .setColor(ready ? 0x2ecc71 : 0x4f545c)
+      .setTitle(title)
+      .setDescription(lines.join('\n'));
+    if (group.image) godEmbed.setThumbnail(group.image);
+    embeds.push(godEmbed);
   }
 
-  embed.setFooter({ text: `Pop list #${list.id} · counts = how many people have each item` });
+  embeds[embeds.length - 1].setFooter({ text: `Pop list #${list.id} · counts = how many people have each item` });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -89,7 +98,7 @@ function buildPopMessage(list, marks) {
       .setStyle(ButtonStyle.Success),
   );
 
-  return { embeds: [embed], components: [row] };
+  return { embeds, components: [row] };
 }
 
 // Ephemeral multi-select so a member can tick every item they hold at once.

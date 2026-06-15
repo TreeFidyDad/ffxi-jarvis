@@ -21,6 +21,7 @@ function buildTemplate(groups) {
   return groups.map((g) => ({
     name: g.name,
     emoji: g.emoji,
+    image: g.image || null, // optional god artwork (embed thumbnail)
     items: g.items.map((it) => ({
       key: `${slug(g.name)}__${slug(it.item)}`,
       item: it.item, // the trade/pop item a player can hold
@@ -41,6 +42,7 @@ const TEMPLATES = {
       {
         name: 'Seiryu',
         emoji: '🟦',
+        image: 'https://static.wikia.nocookie.net/ffxi/images/3/33/Seiryu.jpg',
         items: [
           { nm: 'Seiryu', item: 'Seal of Seiryu', trophy: true },
           { nm: 'Steam Cleaner', item: 'Gem of the East', pop: true },
