@@ -31,6 +31,23 @@ const ID = {
 const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
 const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
 
+// Negative-squared Latin capitals — the boxed "S K Y" look from Raid-Helper.
+const NEG_SQUARED = {
+  A: '🅰', B: '🅱', C: '🅲', D: '🅳', E: '🅴', F: '🅵', G: '🅶', H: '🅷', I: '🅸',
+  J: '🅹', K: '🅺', L: '🅻', M: '🅼', N: '🅽', O: '🅾', P: '🅿', Q: '🆀', R: '🆁',
+  S: '🆂', T: '🆃', U: '🆄', V: '🆅', W: '🆆', X: '🆇', Y: '🆈', Z: '🆉',
+};
+
+// Render a short title in boxed block letters. Long titles are left as-is so
+// they don't wrap into an unreadable wall of boxes.
+function blockifyTitle(title) {
+  const text = String(title || '').trim();
+  if (!text || text.length > 28) return text;
+  return [...text.toUpperCase()]
+    .map((ch) => (ch === ' ' ? '\u2003' : NEG_SQUARED[ch] || ch))
+    .join(' ');
+}
+
 // "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
 function formatMember(s, slot, guildId) {
   let roleIcon = '';
@@ -52,18 +69,18 @@ function buildEmbed(event, signups) {
   signups.forEach((s, i) => slot.set(s.user_id, i + 1));
 
   const embed = new EmbedBuilder()
-    .setTitle(`${closed ? '🔒 ' : '📅 '}${event.title}`)
+    .setTitle(`${closed ? '🔒 ' : ''}${blockifyTitle(event.title)}`)
     .setColor(closed ? 0x95a5a6 : 0x5865f2);
-  if (event.url) embed.setURL(event.url);
   if (event.image_url) embed.setImage(event.image_url);
 
   // ---- Header / description block ----
   const cap = event.cap || 0;
+  const GAP = '\u2003\u2003'; // wide gap to fake columns in the description
   const roleCounts = ROLE_GROUPS.map((g) => {
     const n = attending.filter((s) => g.keys.includes(s.role)).length;
     const icon = roleEmojiMention(event.guild_id, g.icons) || g.emoji;
     return `${icon} ${g.label} **${n}**`;
-  }).join('   ');
+  }).join(GAP);
   const head = (cap ? Math.min(attending.length, cap) : attending.length) + (cap ? `/${cap}` : '');
   const tentSuffix = tentative.length ? ` (+${tentative.length})` : '';
 
@@ -72,17 +89,20 @@ function buildEmbed(event, signups) {
   if (event.description) lines.push(event.description);
   lines.push('');
 
-  // Compact meta chip row: leader · date · time · countdown.
-  const metaBits = [];
-  if (event.leader || event.creator_name) metaBits.push(`🏳️ **${event.leader || event.creator_name}**`);
-  metaBits.push(`📅 ${discordTime(event.start_ts, 'D')}`);
-  metaBits.push(`🕒 ${discordTime(event.start_ts, 't')}`);
-  metaBits.push(`⏳ ${discordRelative(event.start_ts)}`);
-  lines.push(metaBits.join('  •  '));
+  // Row 1: leader + headcount.
+  const topBits = [];
+  if (event.leader || event.creator_name) topBits.push(`🏳️ **${event.leader || event.creator_name}**`);
+  topBits.push(`👥 **${head}**${tentSuffix}`);
+  lines.push(topBits.join(GAP));
 
-  // Single headcount + role-breakdown line: total/cap, then per-role counts.
-  const headcount = `👥 **${head}**${tentSuffix}`;
-  lines.push([headcount, roleCounts].join('   •   '));
+  // Row 2: date · time · countdown.
+  lines.push(
+    [`📅 ${discordTime(event.start_ts, 'D')}`, `🕒 ${discordTime(event.start_ts, 't')}`, `⏳ ${discordRelative(event.start_ts)}`].join(GAP),
+  );
+
+  // Row 3: role breakdown on its own line.
+  lines.push('');
+  lines.push(roleCounts);
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
@@ -96,7 +116,7 @@ function buildEmbed(event, signups) {
     if (!members.length) continue;
     const emoji = jobEmojiMention(event.guild_id, job.code) || job.emoji;
     embed.addFields({
-      name: `${emoji} ${jobName(job.code)} (${members.length})`,
+      name: `${emoji} **__${jobName(job.code)}__** (${members.length})`,
       value: members.map((s) => formatMember(s, slot.get(s.user_id), event.guild_id)).join('\n'),
       inline: true,
     });
@@ -141,9 +161,7 @@ function buildEmbed(event, signups) {
   });
   embed.addFields({ name: '\u200b', value: `[Add to Google Calendar](${gcal})`, inline: false });
 
-  const footer = closed
-    ? `Event #${event.id} • ${attending.length} attending • signups closed`
-    : `Event #${event.id} • ${attending.length} attending • sign up with the buttons below`;
+  const footer = closed ? `Event #${event.id} • signups closed` : `Event #${event.id}`;
   embed.setFooter({ text: footer });
 
   return embed;
