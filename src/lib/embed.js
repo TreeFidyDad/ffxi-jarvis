@@ -20,9 +20,9 @@ const ID = {
   STATUS_PREFIX: 'evt:status:', // evt:status:<statusKey>
   LEAVE: 'evt:leave',
   JOB_SELECT: 'evt:job',
-  EDIT: 'evt:edit',
+  EDIT_PREFIX: 'evt:edit:', // evt:edit:<eventId>
+  EDIT_LINKS_PREFIX: 'evt:editlinks:', // evt:editlinks:<eventId>
   EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
-  EDIT_LINKS: 'evt:editlinks',
   EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
 };
 
@@ -189,20 +189,27 @@ function buildComponents(event) {
       ),
   );
 
-  const manageRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(ID.EDIT)
-      .setLabel('Edit Event')
-      .setEmoji('✏️')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(ID.EDIT_LINKS)
-      .setLabel('Edit Links/Image')
-      .setEmoji('🖼️')
-      .setStyle(ButtonStyle.Secondary),
-  );
+  return [roleRow, statusRow, jobRow];
+}
 
-  return [roleRow, statusRow, jobRow, manageRow];
+// Private (ephemeral) control panel buttons for the creator / leader.
+// The eventId is embedded in the customId so the buttons work from an
+// ephemeral message that isn't tracked in the database.
+function buildManageComponents(event) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${ID.EDIT_PREFIX}${event.id}`)
+        .setLabel('Edit Event')
+        .setEmoji('✏️')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${ID.EDIT_LINKS_PREFIX}${event.id}`)
+        .setLabel('Edit Links/Image')
+        .setEmoji('🖼️')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  ];
 }
 
 // Modal shown to the creator/leader to edit the headline event fields.
@@ -298,4 +305,4 @@ function buildEventMessage(event, signups) {
   };
 }
 
-module.exports = { ID, buildEventMessage, buildEditModal, buildEditLinksModal };
+module.exports = { ID, buildEventMessage, buildManageComponents, buildEditModal, buildEditLinksModal };

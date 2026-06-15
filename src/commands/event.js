@@ -7,7 +7,7 @@ const {
 const config = require('../config');
 const db = require('../db');
 const { parseEventTime } = require('../lib/time');
-const { buildEventMessage } = require('../lib/embed');
+const { buildEventMessage, buildManageComponents } = require('../lib/embed');
 
 const data = new SlashCommandBuilder()
   .setName('event')
@@ -66,6 +66,12 @@ const data = new SlashCommandBuilder()
   )
   .addSubcommand((sub) =>
     sub
+      .setName('manage')
+      .setDescription('Get private Edit buttons for an event (only you can see them)')
+      .addIntegerOption((o) => o.setName('id').setDescription('Event ID').setRequired(true)),
+  )
+  .addSubcommand((sub) =>
+    sub
       .setName('delete')
       .setDescription('Delete an event and its roster')
       .addIntegerOption((o) => o.setName('id').setDescription('Event ID').setRequired(true)),
@@ -92,6 +98,7 @@ async function execute(interaction) {
         '• The roster groups attendees by **Job**, numbers them in signup order, and shows a role summary + headcount.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
+        '• `/event manage id:<#>` gives you private **Edit Event** / **Edit Links/Image** buttons (only you can see them).',
         '• Each event includes an **Add to Google Calendar** link.',
         `• Times are shown in each member's local timezone automatically. Default timezone: \`${config.defaultTimezone}\`.`,
       ].join('\n'),
@@ -163,7 +170,30 @@ async function execute(interaction) {
 
     return interaction.reply({
       flags: MessageFlags.Ephemeral,
-      content: `✅ Created event **#${event.id}** — ${title}.`,
+      content:
+        `✅ Created event **#${event.id}** — ${title}.\n` +
+        'These **Edit** buttons are private to you. Re-open them anytime with ' +
+        `\`/event manage id:${event.id}\`.`,
+      components: buildManageComponents(event),
+    });
+  }
+
+  if (sub === 'manage') {
+    const id = interaction.options.getInteger('id');
+    const event = db.getEvent(id);
+    if (!event) {
+      return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ No event with ID #${id}.` });
+    }
+    if (!canManage(interaction, event)) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: '⛔ Only the event creator or a member with Manage Events can manage this event.',
+      });
+    }
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: `🛠️ Manage event **#${id}** — ${event.title}. Only you can see these buttons.`,
+      components: buildManageComponents(event),
     });
   }
 

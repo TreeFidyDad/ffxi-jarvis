@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } =
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
-const { ID, buildEventMessage, buildEditModal, buildEditLinksModal } = require('./lib/embed');
+const { ID, buildEventMessage, buildManageComponents, buildEditModal, buildEditLinksModal } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -37,29 +37,6 @@ async function handleComponent(interaction) {
   }
   if (event.status === 'closed') {
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: '🔒 Signups are closed for this event.' });
-  }
-
-  // Edit button -> open a modal (creator/leader only). Show it before any other
-  // awaits so we stay inside Discord's 3s window for showModal.
-  if (interaction.customId === ID.EDIT) {
-    if (!canManageEvent(interaction, event)) {
-      return interaction.reply({
-        flags: MessageFlags.Ephemeral,
-        content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
-      });
-    }
-    return interaction.showModal(buildEditModal(event));
-  }
-
-  // Edit Links/Image button -> open the links modal (creator/leader only).
-  if (interaction.customId === ID.EDIT_LINKS) {
-    if (!canManageEvent(interaction, event)) {
-      return interaction.reply({
-        flags: MessageFlags.Ephemeral,
-        content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
-      });
-    }
-    return interaction.showModal(buildEditLinksModal(event));
   }
 
   // Make sure this guild's custom job emojis are loaded before we re-render.
@@ -106,6 +83,29 @@ async function handleComponent(interaction) {
   }
 
   return interaction.deferUpdate();
+}
+
+// Edit Event / Edit Links buttons from the private control panel. The eventId
+// is in the customId, so these work from an ephemeral message (not tracked in
+// the DB). Permission is re-checked on click.
+async function handleManageButton(interaction) {
+  const isLinks = interaction.customId.startsWith(ID.EDIT_LINKS_PREFIX);
+  const prefix = isLinks ? ID.EDIT_LINKS_PREFIX : ID.EDIT_PREFIX;
+  const eventId = Number(interaction.customId.slice(prefix.length));
+  const event = db.getEvent(eventId);
+  if (!event) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⚠️ This event is no longer tracked by the bot.',
+    });
+  }
+  if (!canManageEvent(interaction, event)) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⛔ Only the event creator or a member with Manage Events can edit this event.',
+    });
+  }
+  return interaction.showModal(isLinks ? buildEditLinksModal(event) : buildEditModal(event));
 }
 
 // Handle the Edit Event modal submission.
@@ -241,6 +241,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      // Private control-panel edit buttons carry the eventId in their customId
+      // and may be clicked from an ephemeral message, so route them first.
+      if (
+        interaction.customId.startsWith(ID.EDIT_LINKS_PREFIX) ||
+        interaction.customId.startsWith(ID.EDIT_PREFIX)
+      ) {
+        await handleManageButton(interaction);
+        return;
+      }
       await handleComponent(interaction);
     }
   } catch (error) {
