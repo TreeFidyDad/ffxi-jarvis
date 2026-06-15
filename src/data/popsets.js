@@ -52,6 +52,7 @@ const TEMPLATES = {
       {
         name: 'Suzaku',
         emoji: '🟥',
+        image: 'https://static.wikia.nocookie.net/ffxi/images/a/af/Suzaku.jpg',
         items: [
           { nm: 'Suzaku', item: 'Seal of Suzaku', trophy: true },
           { nm: 'Brigandish Blade', item: 'Gem of the South', pop: true },
@@ -62,6 +63,7 @@ const TEMPLATES = {
       {
         name: 'Byakko',
         emoji: '⬜',
+        image: 'https://static.wikia.nocookie.net/ffxi/images/0/03/Byakko.jpg',
         items: [
           { nm: 'Byakko', item: 'Seal of Byakko', trophy: true },
           { nm: 'Despot', item: 'Gem of the West', pop: true },
@@ -72,6 +74,7 @@ const TEMPLATES = {
       {
         name: 'Genbu',
         emoji: '🟩',
+        image: 'https://static.wikia.nocookie.net/ffxi/images/c/c6/Genbu.jpg',
         items: [
           { nm: 'Genbu', item: 'Seal of Genbu', trophy: true },
           { nm: 'Zipacna', item: 'Gem of the North', pop: true },
