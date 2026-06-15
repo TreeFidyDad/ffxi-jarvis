@@ -28,44 +28,58 @@ function holdersByItem(marks) {
 }
 
 // Build the public checklist message: one embed field per god group, each line
-// a ✅/⬜ item plus who has it.
+// a ✅/⬜ item plus how many people have it (×N) and who. Each god shows how many
+// times it can be popped = the lowest count among its required pop ingredients.
 function buildPopMessage(list, marks) {
   const template = getTemplate(list.template);
   if (!template) {
     return { content: '⚠️ Unknown pop-set template.', embeds: [], components: [] };
   }
   const holders = holdersByItem(marks);
+  const countOf = (it) => (holders.get(it.key) || []).length;
 
-  const items = templateItems(template);
-  const haveCount = items.filter((it) => (holders.get(it.key) || []).length > 0).length;
+  // How many full pops a god group can assemble = min count across its
+  // required ingredients (items flagged pop:true).
+  function popsReady(group) {
+    const ingredients = group.items.filter((it) => it.pop);
+    if (!ingredients.length) return null;
+    return Math.min(...ingredients.map(countOf));
+  }
+
+  const totalPops = template.groups.reduce((sum, g) => sum + (popsReady(g) || 0), 0);
 
   const embed = new EmbedBuilder()
-    .setColor(haveCount === items.length ? 0x2ecc71 : 0x5865f2)
+    .setColor(totalPops > 0 ? 0x2ecc71 : 0x5865f2)
     .setTitle(`${template.emoji} ${list.title}`)
     .setDescription(
       [
         `Tap **✅ I have these** to mark the pop items you're holding.`,
-        `Coverage: **${haveCount}/${items.length}** items held by at least one person.`,
+        `🔁 **Pops ready** = how many times the group can spawn that god right now (limited by the rarest required item).`,
       ].join('\n'),
     );
 
   for (const group of template.groups) {
+    const ready = popsReady(group);
     const lines = group.items.map((it) => {
       const who = holders.get(it.key) || [];
-      const box = who.length ? '✅' : '⬜';
+      const n = who.length;
+      const box = it.trophy ? '🏆' : n ? '✅' : '⬜';
       const label = it.nm && it.nm !== it.item ? `**${it.item}** _(${it.nm})_` : `**${it.item}**`;
+      const tag = it.trophy ? ' _(seal)_' : it.pop ? '' : ' _(loot)_';
       let suffix = '';
-      if (who.length) {
+      if (n) {
         const shown = who.slice(0, MAX_HOLDERS_SHOWN).join(', ');
-        const extra = who.length > MAX_HOLDERS_SHOWN ? ` +${who.length - MAX_HOLDERS_SHOWN}` : '';
+        const extra = n > MAX_HOLDERS_SHOWN ? ` +${n - MAX_HOLDERS_SHOWN}` : '';
         suffix = ` — ${shown}${extra}`;
       }
-      return `${box} ${label}${suffix}`;
+      const countBadge = n ? ` \`×${n}\`` : '';
+      return `${box} ${label}${tag}${countBadge}${suffix}`;
     });
-    embed.addFields({ name: `${group.emoji} ${group.name}`, value: lines.join('\n'), inline: false });
+    const header = ready === null ? `${group.emoji} ${group.name}` : `${group.emoji} ${group.name} — 🔁 ${ready} ready`;
+    embed.addFields({ name: header, value: lines.join('\n'), inline: false });
   }
 
-  embed.setFooter({ text: `Pop list #${list.id}` });
+  embed.setFooter({ text: `Pop list #${list.id} · counts = how many people have each item` });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

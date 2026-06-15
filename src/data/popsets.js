@@ -14,6 +14,9 @@ function slug(s) {
 }
 
 // Build a template's groups, auto-deriving each item's stable key.
+// `pop: true` marks an item that must be traded to spawn the god (an
+// ingredient). Items without it (the god's own Seal, stray loot like Curtana)
+// are tracked for coverage but don't gate how many times the god can be popped.
 function buildTemplate(groups) {
   return groups.map((g) => ({
     name: g.name,
@@ -22,6 +25,8 @@ function buildTemplate(groups) {
       key: `${slug(g.name)}__${slug(it.item)}`,
       item: it.item, // the trade/pop item a player can hold
       nm: it.nm, // the NM / god this item pops (context)
+      pop: Boolean(it.pop), // true = required to spawn the god
+      trophy: Boolean(it.trophy), // true = the god's own Seal (reward)
     })),
   }));
 }
@@ -37,39 +42,39 @@ const TEMPLATES = {
         name: 'Seiryu',
         emoji: '🟦',
         items: [
-          { nm: 'Seiryu', item: 'Seal of Seiryu' },
-          { nm: 'Steam Cleaner', item: 'Gem of the East' },
-          { nm: 'Mother Globe', item: 'Springstone' },
+          { nm: 'Seiryu', item: 'Seal of Seiryu', trophy: true },
+          { nm: 'Steam Cleaner', item: 'Gem of the East', pop: true },
+          { nm: 'Mother Globe', item: 'Springstone', pop: true },
         ],
       },
       {
         name: 'Suzaku',
         emoji: '🟥',
         items: [
-          { nm: 'Suzaku', item: 'Seal of Suzaku' },
-          { nm: 'Brigandish Blade', item: 'Gem of the South' },
+          { nm: 'Suzaku', item: 'Seal of Suzaku', trophy: true },
+          { nm: 'Brigandish Blade', item: 'Gem of the South', pop: true },
           { nm: 'Brigandish Blade', item: 'Curtana' },
-          { nm: 'Faust', item: 'Summerstone' },
+          { nm: 'Faust', item: 'Summerstone', pop: true },
         ],
       },
       {
         name: 'Byakko',
         emoji: '⬜',
         items: [
-          { nm: 'Byakko', item: 'Seal of Byakko' },
-          { nm: 'Despot', item: 'Gem of the West' },
-          { nm: 'Ullikummi', item: 'Autumnstone' },
-          { nm: 'Aura Statue', item: 'Diorite' },
+          { nm: 'Byakko', item: 'Seal of Byakko', trophy: true },
+          { nm: 'Despot', item: 'Gem of the West', pop: true },
+          { nm: 'Ullikummi', item: 'Autumnstone', pop: true },
+          { nm: 'Aura Statue', item: 'Diorite', pop: true },
         ],
       },
       {
         name: 'Genbu',
         emoji: '🟩',
         items: [
-          { nm: 'Genbu', item: 'Seal of Genbu' },
-          { nm: 'Zipacna', item: 'Gem of the North' },
-          { nm: 'Olla Grande', item: 'Winterstone' },
-          { nm: 'Aura Pot', item: "Ro'Maeve Water" },
+          { nm: 'Genbu', item: 'Seal of Genbu', trophy: true },
+          { nm: 'Zipacna', item: 'Gem of the North', pop: true },
+          { nm: 'Olla Grande', item: 'Winterstone', pop: true },
+          { nm: 'Aura Pot', item: "Ro'Maeve Water", pop: true },
         ],
       },
     ]),
