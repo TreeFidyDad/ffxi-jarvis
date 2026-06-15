@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } =
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
-const { ID, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal } = require('./lib/embed');
+const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildSuggestModal } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -260,6 +260,25 @@ async function handleEditLinksModal(interaction) {
   });
 }
 
+// Save a submitted suggestion and privately confirm to the member.
+async function handleSuggestModal(interaction) {
+  const text = interaction.fields.getTextInputValue(SUG.INPUT).trim();
+  if (!text) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Suggestion cannot be empty.' });
+  }
+  const username = interaction.member?.displayName || interaction.user.username;
+  const saved = db.addSuggestion({
+    guildId: interaction.guildId,
+    userId: interaction.user.id,
+    username,
+    text,
+  });
+  return interaction.reply({
+    flags: MessageFlags.Ephemeral,
+    content: `✅ Thanks! Your suggestion was recorded as **#${saved.id}**. Organizers can review it with \`/event suggest list\`.`,
+  });
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -270,7 +289,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith(ID.EDIT_MODAL_PREFIX)) {
+      if (interaction.customId === SUG.MODAL) {
+        await handleSuggestModal(interaction);
+      } else if (interaction.customId.startsWith(ID.EDIT_MODAL_PREFIX)) {
         await handleEditModal(interaction);
       } else if (interaction.customId.startsWith(ID.EDIT_LINKS_MODAL_PREFIX)) {
         await handleEditLinksModal(interaction);
@@ -278,6 +299,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      // Suggestion box button -> open the suggestion modal.
+      if (interaction.customId === SUG.OPEN) {
+        await interaction.showModal(buildSuggestModal());
+        return;
+      }
       // Private control-panel edit buttons carry the eventId in their customId
       // and may be clicked from an ephemeral message, so route them first.
       if (

@@ -7,7 +7,7 @@ const {
 const config = require('../config');
 const db = require('../db');
 const { parseEventTime, isValidTimezone } = require('../lib/time');
-const { buildEventMessage, buildManageComponents } = require('../lib/embed');
+const { buildEventMessage, buildManageComponents, buildSuggestModal, buildSuggestBoardMessage, buildSuggestionList } = require('../lib/embed');
 
 const data = new SlashCommandBuilder()
   .setName('event')
@@ -87,7 +87,55 @@ const data = new SlashCommandBuilder()
           .setRequired(true),
       ),
   )
-  .addSubcommand((sub) => sub.setName('help').setDescription('How to use the bot'));
+  .addSubcommand((sub) => sub.setName('help').setDescription('How to use the bot'))
+  .addSubcommandGroup((group) =>
+    group
+      .setName('suggest')
+      .setDescription('Submit and manage improvement suggestions')
+      .addSubcommand((sub) =>
+        sub.setName('add').setDescription('Submit an improvement idea (opens a form)'),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('board')
+          .setDescription('Post a standing Suggestion Box button here (organizers)'),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('list')
+          .setDescription('Privately list submitted suggestions (organizers)')
+          .addStringOption((o) =>
+            o
+              .setName('status')
+              .setDescription('Filter by status')
+              .setRequired(false)
+              .addChoices(
+                { name: 'open', value: 'open' },
+                { name: 'done', value: 'done' },
+                { name: 'dismissed', value: 'dismissed' },
+              ),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('resolve')
+          .setDescription('Mark a suggestion done or dismissed (organizers)')
+          .addIntegerOption((o) =>
+            o.setName('id').setDescription('Suggestion ID').setRequired(true),
+          )
+          .addStringOption((o) =>
+            o
+              .setName('status')
+              .setDescription('New status (default: done)')
+              .setRequired(false)
+              .addChoices(
+                { name: 'done', value: 'done' },
+                { name: 'dismissed', value: 'dismissed' },
+                { name: 'open', value: 'open' },
+              ),
+          ),
+      ),
+  );
 
 function canManage(interaction, event) {
   if (event && interaction.user.id === event.creator_id) return true;
@@ -95,7 +143,21 @@ function canManage(interaction, event) {
     interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
 }
 
+// Organizer check that isn't tied to a specific event (for the suggestion box).
+function isOrganizer(interaction) {
+  return (
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageEvents) ||
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ||
+    false
+  );
+}
+
 async function execute(interaction) {
+  const group = interaction.options.getSubcommandGroup(false);
+  if (group === 'suggest') {
+    return executeSuggest(interaction);
+  }
+
   const sub = interaction.options.getSubcommand();
 
   if (sub === 'help') {
@@ -111,6 +173,7 @@ async function execute(interaction) {
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
         '• `/event manage id:<#>` gives you private **Edit Event** / **Edit Links/Image** buttons (only you can see them).',
         '• `/event timezone tz:<IANA>` saves **your** timezone, so the times you type when creating are read in your zone.',
+        '• `/event suggest add` opens a form to send the organizers an improvement idea. Organizers: `/event suggest board` posts a standing button, `/event suggest list` reviews them, `/event suggest resolve id:<#>` closes one.',
         '• Each event includes an **Add to Google Calendar** link.',
         `• Times are shown in each member's local timezone automatically. Server default: \`${config.defaultTimezone}\`.`,
       ].join('\n'),
@@ -267,6 +330,66 @@ async function execute(interaction) {
     if (message) await message.delete().catch(() => null);
     db.deleteEvent(id);
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: `🗑️ Deleted event #${id}.` });
+  }
+}
+
+// ---- Suggestion box subcommands -------------------------------------------
+async function executeSuggest(interaction) {
+  const sub = interaction.options.getSubcommand();
+
+  // Any member can submit an idea via the modal.
+  if (sub === 'add') {
+    return interaction.showModal(buildSuggestModal());
+  }
+
+  // Everything below is organizer-only.
+  if (!isOrganizer(interaction)) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '⛔ Only organizers (Manage Events / Manage Server) can do that. Use `/event suggest add` to submit an idea.',
+    });
+  }
+
+  if (sub === 'board') {
+    try {
+      await interaction.channel.send(buildSuggestBoardMessage());
+    } catch (error) {
+      if (error?.code === 50001 || error?.code === 50013) {
+        return interaction.reply({
+          flags: MessageFlags.Ephemeral,
+          content: "⛔ I can't post in this channel. Give me **Send Messages** and **Embed Links** here, then try again.",
+        });
+      }
+      throw error;
+    }
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '✅ Posted the Suggestion Box here. Members can submit ideas with the button.',
+    });
+  }
+
+  if (sub === 'list') {
+    const status = interaction.options.getString('status');
+    const rows = db.getSuggestions(interaction.guildId, status);
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: buildSuggestionList(rows, { status }),
+    });
+  }
+
+  if (sub === 'resolve') {
+    const id = interaction.options.getInteger('id');
+    const status = interaction.options.getString('status') || 'done';
+    const existing = db.getSuggestion(id);
+    if (!existing || existing.guild_id !== interaction.guildId) {
+      return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ No suggestion with ID #${id}.` });
+    }
+    db.setSuggestionStatus(id, status);
+    const verb = status === 'done' ? 'marked done' : status === 'dismissed' ? 'dismissed' : 'reopened';
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: `✅ Suggestion **#${id}** ${verb}.`,
+    });
   }
 }
 

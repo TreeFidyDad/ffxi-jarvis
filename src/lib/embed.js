@@ -28,6 +28,13 @@ const ID = {
   EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
 };
 
+// ---- Suggestion box custom IDs ---------------------------------------------
+const SUG = {
+  OPEN: 'sug:open', // persistent "Suggest an improvement" button
+  MODAL: 'sug:modal', // modal submitted by a member
+  INPUT: 'text', // modal text input id
+};
+
 const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
 const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
 
@@ -337,4 +344,76 @@ function buildEventMessage(event, signups) {
   };
 }
 
-module.exports = { ID, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal };
+// ---- Suggestion box --------------------------------------------------------
+
+// Modal a member fills in to submit an improvement idea.
+function buildSuggestModal() {
+  const input = new TextInputBuilder()
+    .setCustomId(SUG.INPUT)
+    .setLabel('Your suggestion')
+    .setPlaceholder('What would make events / the bot better?')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000);
+
+  return new ModalBuilder()
+    .setCustomId(SUG.MODAL)
+    .setTitle('💡 Suggest an improvement')
+    .addComponents(new ActionRowBuilder().addComponents(input));
+}
+
+// The persistent "Suggest an improvement" button row.
+function buildSuggestButtonRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(SUG.OPEN)
+      .setLabel('Suggest an improvement')
+      .setEmoji('💡')
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
+// A standing message members can use any time to drop suggestions.
+function buildSuggestBoardMessage() {
+  const embed = new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle('💡 Suggestion Box')
+    .setDescription(
+      [
+        'Have an idea to improve events or the bot? Tap the button below.',
+        'Your suggestion is sent privately to the organizers — no public spam.',
+      ].join('\n'),
+    );
+  return { embeds: [embed], components: [buildSuggestButtonRow()] };
+}
+
+// Ephemeral list of suggestions for organizers.
+function buildSuggestionList(rows, { status } = {}) {
+  const label = status ? `${status} ` : '';
+  if (!rows.length) {
+    return `📭 No ${label}suggestions yet.`;
+  }
+  const lines = rows.slice(0, 25).map((s) => {
+    const mark = s.status === 'done' ? '✅' : s.status === 'dismissed' ? '🚫' : '•';
+    const when = `<t:${s.created_at}:d>`;
+    const text = s.text.length > 180 ? `${s.text.slice(0, 177)}…` : s.text;
+    return `${mark} \`#${s.id}\` ${when} — **${s.username}**: ${text}`;
+  });
+  const header = `**💡 Suggestions${status ? ` (${status})` : ''}** — ${rows.length} total`;
+  const more = rows.length > 25 ? `\n…and ${rows.length - 25} more.` : '';
+  return [header, ...lines].join('\n') + more;
+}
+
+module.exports = {
+  ID,
+  SUG,
+  buildEventMessage,
+  buildManageComponents,
+  buildDpsPicker,
+  buildEditModal,
+  buildEditLinksModal,
+  buildSuggestModal,
+  buildSuggestButtonRow,
+  buildSuggestBoardMessage,
+  buildSuggestionList,
+};

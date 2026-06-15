@@ -75,6 +75,19 @@ db.exec(`
   );
 `);
 
+// Player-submitted improvement suggestions for the bot / events.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS suggestions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT,
+    user_id    TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'open',
+    created_at INTEGER NOT NULL
+  );
+`);
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
@@ -232,6 +245,40 @@ function removeSignup(eventId, userId) {
   removeSignupStmt.run(eventId, userId);
 }
 
+// ---- Suggestions -----------------------------------------------------------
+
+const insertSuggestionStmt = db.prepare(`
+  INSERT INTO suggestions (guild_id, user_id, username, text, status, created_at)
+  VALUES (?, ?, ?, ?, 'open', ?)
+`);
+function addSuggestion({ guildId, userId, username, text }) {
+  const result = insertSuggestionStmt.run(guildId ?? null, userId, username, text, now());
+  return getSuggestion(Number(result.lastInsertRowid));
+}
+
+const getSuggestionStmt = db.prepare('SELECT * FROM suggestions WHERE id = ?');
+function getSuggestion(id) {
+  return getSuggestionStmt.get(id) || null;
+}
+
+const getSuggestionsAllStmt = db.prepare(
+  'SELECT * FROM suggestions WHERE guild_id = ? ORDER BY created_at DESC, id DESC',
+);
+const getSuggestionsByStatusStmt = db.prepare(
+  'SELECT * FROM suggestions WHERE guild_id = ? AND status = ? ORDER BY created_at DESC, id DESC',
+);
+function getSuggestions(guildId, status) {
+  return status
+    ? getSuggestionsByStatusStmt.all(guildId, status)
+    : getSuggestionsAllStmt.all(guildId);
+}
+
+const setSuggestionStatusStmt = db.prepare('UPDATE suggestions SET status = ? WHERE id = ?');
+function setSuggestionStatus(id, status) {
+  setSuggestionStatusStmt.run(status, id);
+  return getSuggestion(id);
+}
+
 // ---- User preferences ------------------------------------------------------
 
 const getUserTimezoneStmt = db.prepare('SELECT timezone FROM user_prefs WHERE user_id = ?');
@@ -264,4 +311,8 @@ module.exports = {
   removeSignup,
   getUserTimezone,
   setUserTimezone,
+  addSuggestion,
+  getSuggestion,
+  getSuggestions,
+  setSuggestionStatus,
 };
