@@ -10,7 +10,8 @@ primary_region = "iad"  # change to a region near you (e.g. lax, ord, sjc)
 
 [env]
   DATABASE_PATH = "/data/ffxi-jarvis.db"
-  DEFAULT_TIMEZONE = "America/New_York"
+  DEFAULT_TIMEZONE = "America/Los_Angeles"
+  DEFAULT_IMAGE_URL = "https://horizonffxi.wiki/w/images/thumb/3/33/HorizonXI_Wiki.png/1198px-HorizonXI_Wiki.png"
   REMINDER_MINUTES = "15"
 
 # Persistent storage so events/signups survive deploys and restarts.

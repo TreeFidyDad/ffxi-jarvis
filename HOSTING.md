@@ -98,6 +98,12 @@ Update later with: `git pull && pm2 restart ffxi-jarvis`.
 ## Notes
 
 - **Run only one instance.** A Discord gateway bot must not be scaled to multiple
-  always-on copies, or it will process interactions twice.
+  always-on copies, or it will process interactions twice. If you move to the cloud,
+  stop the copy running on your PC so only one is live.
+- **Keep your existing events.** The bot tracks posted events in its SQLite file
+  (`DATABASE_PATH`). A fresh host starts empty, so it won't be able to edit events that
+  are already posted in Discord. To carry them over, copy your local `data/ffxi-jarvis.db`
+  onto the new host's volume *before* first boot (e.g. Fly: `fly ssh sftp shell` then
+  `put data/ffxi-jarvis.db /data/ffxi-jarvis.db`). Or just start fresh and post new events.
 - **Back up** the SQLite file (`DATABASE_PATH`) if you care about historical events.
 - If you rotate the bot token, update the secret/`.env` and restart.
