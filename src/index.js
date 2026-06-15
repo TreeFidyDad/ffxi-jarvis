@@ -357,6 +357,21 @@ async function checkReminders() {
   }
 }
 
+// ---- Expiry re-render ------------------------------------------------------
+// Re-render events that have just passed their end time so they flip to the
+// red "ended" look on their own, without anyone needing to interact.
+async function checkExpired() {
+  const expired = db.getJustExpired();
+  for (const event of expired) {
+    try {
+      await rerenderEvent(event.id);
+    } catch (error) {
+      console.error(`Expiry re-render failed for event #${event.id}:`, error);
+    }
+    db.markExpiredRendered(event.id);
+  }
+}
+
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   for (const guild of c.guilds.cache.values()) {
@@ -370,6 +385,10 @@ client.once(Events.ClientReady, async (c) => {
     setInterval(checkReminders, 60 * 1000);
     console.log(`Reminders enabled: ${config.reminderMinutes} minute(s) before start.`);
   }
+  // Flip events to the red "ended" look shortly after they finish.
+  checkExpired().catch((err) => console.error('Expiry sweep failed:', err));
+  setInterval(() => checkExpired().catch((err) => console.error('Expiry sweep failed:', err)), 60 * 1000);
+  console.log('Expiry re-render sweep enabled (every 60s).');
 });
 
 // Refresh the cache whenever a guild's emojis change.

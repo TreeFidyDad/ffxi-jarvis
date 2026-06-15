@@ -50,6 +50,12 @@ function blockifyTitle(title) {
     .join('\u2009'); // thin space between letters
 }
 
+// An event is "expired" once its scheduled end (start + duration) has passed.
+function isExpired(event) {
+  const end = event.start_ts + (event.duration_min || 120) * 60;
+  return Math.floor(Date.now() / 1000) >= end;
+}
+
 // "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
 function formatMember(s, slot, guildId) {
   let roleIcon = '';
@@ -65,14 +71,18 @@ function buildEmbed(event, signups) {
   const tentative = signups.filter((s) => s.status === STATUS.TENTATIVE);
   const absence = signups.filter((s) => s.status === STATUS.ABSENCE);
   const closed = event.status === 'closed';
+  const expired = isExpired(event);
 
   // Stable slot number per user, in signup order across all statuses.
   const slot = new Map();
   signups.forEach((s, i) => slot.set(s.user_id, i + 1));
 
+  // Expired events go red, closed (but not yet past) go grey, upcoming blurple.
+  const color = expired ? 0xed4245 : closed ? 0x95a5a6 : 0x5865f2;
+  const titlePrefix = closed ? '🔒 ' : expired ? '🔴 ' : '';
   const embed = new EmbedBuilder()
-    .setTitle(`${closed ? '🔒 ' : ''}${blockifyTitle(event.title)}`)
-    .setColor(closed ? 0x95a5a6 : 0x5865f2);
+    .setTitle(`${titlePrefix}${blockifyTitle(event.title)}`)
+    .setColor(color);
   if (event.image_url) embed.setImage(event.image_url);
 
   // ---- Header / description block ----
@@ -163,7 +173,11 @@ function buildEmbed(event, signups) {
   });
   embed.addFields({ name: '\u200b', value: `[Add to Google Calendar](${gcal})`, inline: false });
 
-  const footer = closed ? `Event #${event.id} • signups closed` : `Event #${event.id}`;
+  const footer = closed
+    ? `Event #${event.id} • signups closed`
+    : expired
+      ? `Event #${event.id} • ended`
+      : `Event #${event.id}`;
   embed.setFooter({ text: footer });
 
   return embed;
@@ -412,6 +426,7 @@ function buildSuggestionList(rows, { status } = {}) {
 module.exports = {
   ID,
   SUG,
+  isExpired,
   buildEventMessage,
   buildManageComponents,
   buildDpsPicker,

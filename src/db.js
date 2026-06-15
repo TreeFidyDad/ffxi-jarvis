@@ -59,6 +59,8 @@ addColumnIfMissing('events', 'url', 'TEXT');
 addColumnIfMissing('events', 'image_url', 'TEXT');
 addColumnIfMissing('events', 'cap', 'INTEGER');
 addColumnIfMissing('events', 'duration_min', 'INTEGER NOT NULL DEFAULT 120');
+// Set once we've re-rendered an event red after it expired (avoids re-editing every minute).
+addColumnIfMissing('events', 'expired_rendered', 'INTEGER NOT NULL DEFAULT 0');
 
 // Immutable signup order used for stable slot numbers. Backfill existing rows.
 if (!tableColumns('signups').has('created_at')) {
@@ -201,6 +203,23 @@ function markReminderSent(id) {
   markReminderSentStmt.run(id);
 }
 
+// Events that have passed their end time (start + duration) and haven't yet been
+// re-rendered into their "expired" (red) state. Only those with a posted message.
+const justExpiredStmt = db.prepare(`
+  SELECT * FROM events
+  WHERE expired_rendered = 0
+    AND message_id IS NOT NULL
+    AND (start_ts + duration_min * 60) <= ?
+`);
+function getJustExpired() {
+  return justExpiredStmt.all(now());
+}
+
+const markExpiredRenderedStmt = db.prepare('UPDATE events SET expired_rendered = 1 WHERE id = ?');
+function markExpiredRendered(id) {
+  markExpiredRenderedStmt.run(id);
+}
+
 // ---- Signups ---------------------------------------------------------------
 
 const getSignupStmt = db.prepare('SELECT * FROM signups WHERE event_id = ? AND user_id = ?');
@@ -305,6 +324,8 @@ module.exports = {
   deleteEvent,
   getDueReminders,
   markReminderSent,
+  getJustExpired,
+  markExpiredRendered,
   getSignup,
   getSignups,
   upsertSignup,
