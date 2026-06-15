@@ -92,7 +92,7 @@ function buildEmbed(event, signups) {
 
   // Row 2: date · time · countdown.
   lines.push(
-    [`📅 ${discordTime(event.start_ts, 'D')}`, `🕒 ${discordTime(event.start_ts, 't')}`, `⏳ ${discordRelative(event.start_ts)}`].join(GAP),
+    [`🗓️ ${discordTime(event.start_ts, 'D')}`, `🕒 ${discordTime(event.start_ts, 't')}`, `⏳ ${discordRelative(event.start_ts)}`].join(GAP),
   );
 
   // Row 3: role breakdown on its own line.
