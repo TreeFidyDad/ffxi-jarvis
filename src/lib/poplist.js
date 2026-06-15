@@ -65,7 +65,7 @@ function buildPopMessage(list, marks) {
       const n = who.length;
       const box = it.trophy ? '🏆' : n ? '✅' : '⬜';
       const label = it.nm && it.nm !== it.item ? `**${it.item}** _(${it.nm})_` : `**${it.item}**`;
-      const tag = it.trophy ? ' _(seal)_' : it.pop ? '' : ' _(loot)_';
+      const tag = it.trophy ? ' _(seal)_' : it.pop ? '' : ' _(extra)_';
       let suffix = '';
       if (n) {
         const shown = who.slice(0, MAX_HOLDERS_SHOWN).join(', ');

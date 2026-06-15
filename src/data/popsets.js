@@ -64,7 +64,7 @@ const TEMPLATES = {
           { nm: 'Byakko', item: 'Seal of Byakko', trophy: true },
           { nm: 'Despot', item: 'Gem of the West', pop: true },
           { nm: 'Ullikummi', item: 'Autumnstone', pop: true },
-          { nm: 'Aura Statue', item: 'Diorite', pop: true },
+          { nm: 'Aura Statue', item: 'Diorite' },
         ],
       },
       {
@@ -74,7 +74,7 @@ const TEMPLATES = {
           { nm: 'Genbu', item: 'Seal of Genbu', trophy: true },
           { nm: 'Zipacna', item: 'Gem of the North', pop: true },
           { nm: 'Olla Grande', item: 'Winterstone', pop: true },
-          { nm: 'Aura Pot', item: "Ro'Maeve Water", pop: true },
+          { nm: 'Aura Pot', item: "Ro'Maeve Water" },
         ],
       },
     ]),
