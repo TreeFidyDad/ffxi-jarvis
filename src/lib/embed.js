@@ -31,21 +31,16 @@ const ID = {
 const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
 const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
 
-// Negative-squared Latin capitals — the boxed "S K Y" look from Raid-Helper.
-const NEG_SQUARED = {
-  A: '🅰', B: '🅱', C: '🅲', D: '🅳', E: '🅴', F: '🅵', G: '🅶', H: '🅷', I: '🅸',
-  J: '🅹', K: '🅺', L: '🅻', M: '🅼', N: '🅽', O: '🅾', P: '🅿', Q: '🆀', R: '🆁',
-  S: '🆂', T: '🆃', U: '🆄', V: '🆅', W: '🆆', X: '🆇', Y: '🆈', Z: '🆉',
-};
-
-// Render a short title in boxed block letters. Long titles are left as-is so
-// they don't wrap into an unreadable wall of boxes.
+// Render a short title with spaced-out letters for the clean "S K Y  G O D S"
+// look (embed titles are already shown bold by Discord). Plain spacing renders
+// reliably on every client — unlike emoji block letters, which tofu on some.
+// Long titles are left untouched so they don't wrap awkwardly.
 function blockifyTitle(title) {
   const text = String(title || '').trim();
   if (!text || text.length > 28) return text;
   return [...text.toUpperCase()]
-    .map((ch) => (ch === ' ' ? '\u2003' : NEG_SQUARED[ch] || ch))
-    .join(' ');
+    .map((ch) => (ch === ' ' ? '\u2002' : ch)) // en-space between words
+    .join('\u2009'); // thin space between letters
 }
 
 // "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
