@@ -9,7 +9,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 
-const { ROLES, EXTRA_STATUSES, ROLE_GROUPS, STATUS } = require('../data/roles');
+const { ROLES, EXTRA_STATUSES, ROLE_GROUPS, STATUS, ROLE_BY_KEY, MAIN_ROLE_BUTTONS, DPS_ROLES } = require('../data/roles');
 const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
 const { discordTime, discordRelative, googleCalendarLink, formatLocalParts } = require('./time');
 const { jobEmojiMention, jobEmojiComponent, roleEmojiMention, roleEmojiComponent } = require('./guildEmojis');
@@ -17,6 +17,8 @@ const { jobEmojiMention, jobEmojiComponent, roleEmojiMention, roleEmojiComponent
 // ---- Component custom IDs --------------------------------------------------
 const ID = {
   ROLE_PREFIX: 'evt:role:', // evt:role:<roleKey>
+  DPS_OPEN: 'evt:dps', // opens the DPS subtype picker
+  DPS_SET_PREFIX: 'evt:dpsset:', // evt:dpsset:<eventId>:<roleKey>
   STATUS_PREFIX: 'evt:status:', // evt:status:<statusKey>
   LEAVE: 'evt:leave',
   JOB_SELECT: 'evt:job',
@@ -26,15 +28,15 @@ const ID = {
   EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
 };
 
-const ROLE_EMOJI = Object.fromEntries(ROLES.map((r) => [r.key, r.emoji]));
-const ROLE_GROUP_BY_KEY = Object.fromEntries(ROLES.map((r) => [r.key, r.group]));
+const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
+const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
 
 // "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
 function formatMember(s, slot, guildId) {
   let roleIcon = '';
   if (s.role) {
-    const custom = roleEmojiMention(guildId, ROLE_GROUP_BY_KEY[s.role]);
-    roleIcon = `${custom || ROLE_EMOJI[s.role]} `;
+    const custom = roleEmojiMention(guildId, ROLE_ICONS_BY_KEY[s.role]);
+    roleIcon = `${custom || ROLE_EMOJI[s.role] || '⚔️'} `;
   }
   return `\`${String(slot).padStart(2, ' ')}\` ${roleIcon}${s.username}`;
 }
@@ -59,7 +61,7 @@ function buildEmbed(event, signups) {
   const cap = event.cap || 0;
   const roleCounts = ROLE_GROUPS.map((g) => {
     const n = attending.filter((s) => g.keys.includes(s.role)).length;
-    const icon = roleEmojiMention(event.guild_id, g.group) || g.emoji;
+    const icon = roleEmojiMention(event.guild_id, g.icons) || g.emoji;
     return `${icon} ${g.label} **${n}**`;
   }).join('   ');
   const head = (cap ? Math.min(attending.length, cap) : attending.length) + (cap ? `/${cap}` : '');
@@ -157,13 +159,14 @@ function buildComponents(event) {
   if (event.status === 'closed') return [];
 
   const roleRow = new ActionRowBuilder().addComponents(
-    ...ROLES.map((role) =>
-      new ButtonBuilder()
-        .setCustomId(`${ID.ROLE_PREFIX}${role.key}`)
-        .setLabel(role.label)
-        .setEmoji(roleEmojiComponent(event.guild_id, role.group) || role.emoji)
-        .setStyle(ButtonStyle.Primary),
-    ),
+    ...MAIN_ROLE_BUTTONS.map((b) => {
+      const customId = b.kind === 'dps' ? ID.DPS_OPEN : `${ID.ROLE_PREFIX}${b.key}`;
+      return new ButtonBuilder()
+        .setCustomId(customId)
+        .setLabel(b.label)
+        .setEmoji(roleEmojiComponent(event.guild_id, b.icons) || b.emoji)
+        .setStyle(ButtonStyle.Primary);
+    }),
   );
 
   const statusRow = new ActionRowBuilder().addComponents(
@@ -196,6 +199,22 @@ function buildComponents(event) {
   );
 
   return [roleRow, statusRow, jobRow];
+}
+
+// Ephemeral DPS subtype picker shown when a member clicks the DPS button.
+// Each button carries the eventId so it works from an untracked ephemeral
+// message: evt:dpsset:<eventId>:<roleKey>.
+function buildDpsPicker(event) {
+  const row = new ActionRowBuilder().addComponents(
+    ...DPS_ROLES.map((role) =>
+      new ButtonBuilder()
+        .setCustomId(`${ID.DPS_SET_PREFIX}${event.id}:${role.key}`)
+        .setLabel(role.label)
+        .setEmoji(roleEmojiComponent(event.guild_id, role.icons) || role.emoji)
+        .setStyle(ButtonStyle.Primary),
+    ),
+  );
+  return [row];
 }
 
 // Private (ephemeral) control panel buttons for the creator / leader.
@@ -311,4 +330,4 @@ function buildEventMessage(event, signups) {
   };
 }
 
-module.exports = { ID, buildEventMessage, buildManageComponents, buildEditModal, buildEditLinksModal };
+module.exports = { ID, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal };

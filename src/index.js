@@ -3,7 +3,7 @@ const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } =
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
-const { ID, buildEventMessage, buildManageComponents, buildEditModal, buildEditLinksModal } = require('./lib/embed');
+const { ID, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal } = require('./lib/embed');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -46,6 +46,15 @@ async function handleComponent(interaction) {
   const username = interaction.member?.displayName || interaction.user.username;
   const customId = interaction.customId;
 
+  // DPS button -> open the ephemeral subtype picker (Melee / Phys / Magic).
+  if (customId === ID.DPS_OPEN) {
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '🗡️ Which kind of DPS are you?',
+      components: buildDpsPicker(event),
+    });
+  }
+
   // Role buttons -> attending with a role.
   if (customId.startsWith(ID.ROLE_PREFIX)) {
     const roleKey = customId.slice(ID.ROLE_PREFIX.length);
@@ -83,6 +92,34 @@ async function handleComponent(interaction) {
   }
 
   return interaction.deferUpdate();
+}
+
+// DPS subtype picker buttons. Clicked from the ephemeral picker (not tracked by
+// message id), so the eventId is embedded in the customId:
+// evt:dpsset:<eventId>:<roleKey>.
+async function handleDpsSet(interaction) {
+  const rest = interaction.customId.slice(ID.DPS_SET_PREFIX.length);
+  const sep = rest.indexOf(':');
+  const eventId = Number(rest.slice(0, sep));
+  const roleKey = rest.slice(sep + 1);
+  const event = db.getEvent(eventId);
+  if (!event) {
+    return interaction.update({ content: '⚠️ This event is no longer tracked by the bot.', components: [] });
+  }
+  if (event.status === 'closed') {
+    return interaction.update({ content: '🔒 Signups are closed for this event.', components: [] });
+  }
+  if (!ROLE_BY_KEY.has(roleKey)) {
+    return interaction.update({ content: '⚠️ Unknown DPS type.', components: [] });
+  }
+
+  const userId = interaction.user.id;
+  const username = interaction.member?.displayName || interaction.user.username;
+  db.upsertSignup(event.id, userId, username, { role: roleKey, status: STATUS.ATTENDING });
+  await rerenderEvent(eventId);
+
+  const label = ROLE_BY_KEY.get(roleKey).label;
+  return interaction.update({ content: `✅ Signed up as **${label}**.`, components: [] });
 }
 
 // Edit Event / Edit Links buttons from the private control panel. The eventId
@@ -248,6 +285,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         interaction.customId.startsWith(ID.EDIT_PREFIX)
       ) {
         await handleManageButton(interaction);
+        return;
+      }
+      // DPS subtype picker buttons carry the eventId and are clicked from an
+      // ephemeral message, so route them before the tracked-message handler.
+      if (interaction.customId.startsWith(ID.DPS_SET_PREFIX)) {
+        await handleDpsSet(interaction);
         return;
       }
       await handleComponent(interaction);
