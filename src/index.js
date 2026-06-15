@@ -3,7 +3,9 @@ const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } =
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
+const popCommand = require('./commands/pop');
 const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildSuggestModal } = require('./lib/embed');
+const { POP, buildPopMessage, buildPopPicker } = require('./lib/poplist');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -260,6 +262,51 @@ async function handleEditLinksModal(interaction) {
   });
 }
 
+// ---- Pop-item checklist ----------------------------------------------------
+// "I have these" button -> open an ephemeral multi-select pre-filled with the
+// member's current ticks for this list.
+async function handlePopOpen(interaction) {
+  const listId = Number(interaction.customId.slice(POP.OPEN_PREFIX.length));
+  const list = db.getPopList(listId);
+  if (!list) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ This pop list is no longer tracked by the bot.' });
+  }
+  const mine = db.getUserPopMarks(listId, interaction.user.id);
+  return interaction.reply({
+    flags: MessageFlags.Ephemeral,
+    content: `✅ Select **every** pop item you currently have for **${list.title}**, then close the menu. Unticking removes it.`,
+    components: buildPopPicker(list, mine),
+  });
+}
+
+// Multi-select submit -> replace the member's ticks and refresh the public board.
+async function handlePopSelect(interaction) {
+  const listId = Number(interaction.customId.slice(POP.SELECT_PREFIX.length));
+  const list = db.getPopList(listId);
+  if (!list) {
+    return interaction.update({ content: '⚠️ This pop list is no longer tracked by the bot.', components: [] });
+  }
+  const username = interaction.member?.displayName || interaction.user.username;
+  db.setUserPopMarks(listId, interaction.user.id, username, interaction.values || []);
+
+  // Refresh the posted board in place.
+  const channel = await client.channels.fetch(list.channel_id).catch(() => null);
+  const message = list.message_id
+    ? await channel?.messages.fetch(list.message_id).catch(() => null)
+    : null;
+  if (message) {
+    await message.edit(buildPopMessage(list, db.getPopMarks(listId))).catch(() => null);
+  }
+
+  const n = (interaction.values || []).length;
+  return interaction.update({
+    content: n
+      ? `✅ Saved — you're marked as having **${n}** item${n === 1 ? '' : 's'}. The checklist is updated.`
+      : '✅ Saved — you have **no** items marked now. The checklist is updated.',
+    components: [],
+  });
+}
+
 // Save a submitted suggestion and privately confirm to the member.
 async function handleSuggestModal(interaction) {
   const text = interaction.fields.getTextInputValue(SUG.INPUT).trim();
@@ -285,6 +332,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (interaction.commandName === 'event') {
         if (interaction.guildId) await ensureGuildEmojis(client, interaction.guildId);
         await eventCommand.execute(interaction);
+      } else if (interaction.commandName === 'pop') {
+        await popCommand.execute(interaction);
       }
       return;
     }
@@ -302,6 +351,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Suggestion box button -> open the suggestion modal.
       if (interaction.customId === SUG.OPEN) {
         await interaction.showModal(buildSuggestModal());
+        return;
+      }
+      // Pop checklist: open the member's "I have these" picker.
+      if (interaction.customId.startsWith(POP.OPEN_PREFIX)) {
+        await handlePopOpen(interaction);
+        return;
+      }
+      // Pop checklist: member submitted their multi-select of held items.
+      if (interaction.customId.startsWith(POP.SELECT_PREFIX)) {
+        await handlePopSelect(interaction);
         return;
       }
       // Private control-panel edit buttons carry the eventId in their customId

@@ -90,6 +90,34 @@ db.exec(`
   );
 `);
 
+// Pop-item checklists. A list is one posted message tied to a template (e.g.
+// "sky"); pop_marks records which items each player has ticked.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pop_lists (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT,
+    creator_id TEXT NOT NULL,
+    template   TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS pop_marks (
+    list_id   INTEGER NOT NULL,
+    item_key  TEXT NOT NULL,
+    user_id   TEXT NOT NULL,
+    username  TEXT NOT NULL,
+    marked_at INTEGER NOT NULL,
+    PRIMARY KEY (list_id, item_key, user_id),
+    FOREIGN KEY (list_id) REFERENCES pop_lists(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pop_lists_message ON pop_lists(message_id);
+  CREATE INDEX IF NOT EXISTS idx_pop_marks_list ON pop_marks(list_id);
+`);
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
@@ -264,8 +292,71 @@ function removeSignup(eventId, userId) {
   removeSignupStmt.run(eventId, userId);
 }
 
-// ---- Suggestions -----------------------------------------------------------
+// ---- Pop-item checklists ---------------------------------------------------
 
+const insertPopListStmt = db.prepare(`
+  INSERT INTO pop_lists (guild_id, channel_id, creator_id, template, title, created_at)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+function createPopList({ guildId, channelId, creatorId, template, title }) {
+  const result = insertPopListStmt.run(guildId, channelId, creatorId, template, title, now());
+  return getPopList(Number(result.lastInsertRowid));
+}
+
+const getPopListStmt = db.prepare('SELECT * FROM pop_lists WHERE id = ?');
+function getPopList(id) {
+  return getPopListStmt.get(id) || null;
+}
+
+const getPopListByMessageStmt = db.prepare('SELECT * FROM pop_lists WHERE message_id = ?');
+function getPopListByMessage(messageId) {
+  return getPopListByMessageStmt.get(messageId) || null;
+}
+
+const setPopListMessageStmt = db.prepare('UPDATE pop_lists SET message_id = ? WHERE id = ?');
+function setPopListMessage(id, messageId) {
+  setPopListMessageStmt.run(messageId, id);
+}
+
+const getPopMarksStmt = db.prepare('SELECT * FROM pop_marks WHERE list_id = ?');
+function getPopMarks(listId) {
+  return getPopMarksStmt.all(listId);
+}
+
+const getUserPopMarksStmt = db.prepare(
+  'SELECT item_key FROM pop_marks WHERE list_id = ? AND user_id = ?',
+);
+function getUserPopMarks(listId, userId) {
+  return getUserPopMarksStmt.all(listId, userId).map((r) => r.item_key);
+}
+
+const insertPopMarkStmt = db.prepare(`
+  INSERT OR IGNORE INTO pop_marks (list_id, item_key, user_id, username, marked_at)
+  VALUES (?, ?, ?, ?, ?)
+`);
+const deleteUserPopMarksStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ? AND user_id = ?');
+
+// Replace a user's marks for this list with exactly `itemKeys`.
+function setUserPopMarks(listId, userId, username, itemKeys) {
+  deleteUserPopMarksStmt.run(listId, userId);
+  const ts = now();
+  for (const key of itemKeys) {
+    insertPopMarkStmt.run(listId, key, userId, username, ts);
+  }
+}
+
+const deletePopListStmt = db.prepare('DELETE FROM pop_lists WHERE id = ?');
+const deletePopMarksForListStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ?');
+function deletePopList(id) {
+  deletePopMarksForListStmt.run(id);
+  deletePopListStmt.run(id);
+}
+
+function resetPopList(id) {
+  deletePopMarksForListStmt.run(id);
+}
+
+// ---- Suggestions -----------------------------------------------------------
 const insertSuggestionStmt = db.prepare(`
   INSERT INTO suggestions (guild_id, user_id, username, text, status, created_at)
   VALUES (?, ?, ?, ?, 'open', ?)
@@ -336,4 +427,13 @@ module.exports = {
   getSuggestion,
   getSuggestions,
   setSuggestionStatus,
+  createPopList,
+  getPopList,
+  getPopListByMessage,
+  setPopListMessage,
+  getPopMarks,
+  getUserPopMarks,
+  setUserPopMarks,
+  deletePopList,
+  resetPopList,
 };
