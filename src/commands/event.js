@@ -150,7 +150,7 @@ async function execute(interaction) {
       interaction.member?.displayName ||
       interaction.user.username;
     const url = interaction.options.getString('url');
-    const imageUrl = interaction.options.getString('image');
+    const imageUrl = interaction.options.getString('image') || config.defaultImageUrl || null;
 
     if (url && !/^https?:\/\//i.test(url)) {
       return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ `url` must start with http:// or https://' });

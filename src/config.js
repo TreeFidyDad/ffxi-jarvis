@@ -15,6 +15,7 @@ const config = {
   clientId: required('CLIENT_ID'),
   guildId: process.env.GUILD_ID || null,
   defaultTimezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
+  defaultImageUrl: process.env.DEFAULT_IMAGE_URL || null,
   reminderMinutes: Number.parseInt(process.env.REMINDER_MINUTES ?? '15', 10) || 0,
   databasePath: process.env.DATABASE_PATH || 'data/ffxi-jarvis.db',
 };
