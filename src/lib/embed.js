@@ -196,6 +196,11 @@ function buildComponents(event) {
       .setLabel('Withdraw')
       .setEmoji('🚪')
       .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(SUG.OPEN)
+      .setLabel('Suggest')
+      .setEmoji('💡')
+      .setStyle(ButtonStyle.Secondary),
   );
 
   const jobRow = new ActionRowBuilder().addComponents(
