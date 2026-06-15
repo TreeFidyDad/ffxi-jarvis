@@ -80,8 +80,9 @@ function buildEmbed(event, signups) {
   metaBits.push(`⏳ ${discordRelative(event.start_ts)}`);
   lines.push(metaBits.join('  •  '));
 
-  lines.push(`👥 **${head}** signed up${tentSuffix}`);
-  lines.push(roleCounts);
+  // Single headcount + role-breakdown line: total/cap, then per-role counts.
+  const headcount = `👥 **${head}**${tentSuffix}`;
+  lines.push([headcount, roleCounts].join('   •   '));
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
