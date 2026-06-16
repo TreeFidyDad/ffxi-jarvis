@@ -19,6 +19,7 @@ const config = {
   reminderMinutes: Number.parseInt(process.env.REMINDER_MINUTES ?? '15', 10) || 0,
   databasePath: process.env.DATABASE_PATH || 'data/ffxi-jarvis.db',
   bridgeChannelId: process.env.BRIDGE_CHANNEL_ID || null,
+  bridgeChannelId2: process.env.BRIDGE_CHANNEL_ID_2 || null,
 };
 
 module.exports = config;

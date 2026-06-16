@@ -466,7 +466,7 @@ client.once(Events.ClientReady, async (c) => {
   console.log('Expiry re-render sweep enabled (every 60s).');
 
   // Start linkshell bridge
-  linkshellBridge.start(client, config.bridgeChannelId);
+  linkshellBridge.start(client, { LS1: config.bridgeChannelId, LS2: config.bridgeChannelId2 });
 });
 
 // Refresh the cache whenever a guild's emojis change.
@@ -477,7 +477,7 @@ client.on(Events.GuildEmojisUpdate, (emojis, guild) => {
 
 // ---- Linkshell Bridge: relay Discord messages to FFXI ----------------------
 client.on(Events.MessageCreate, (message) => {
-  linkshellBridge.handleDiscordMessage(message, config.bridgeChannelId);
+  linkshellBridge.handleDiscordMessage(message);
 });
 
 client.login(config.token);
