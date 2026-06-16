@@ -18,6 +18,7 @@ const config = {
   defaultImageUrl: process.env.DEFAULT_IMAGE_URL || null,
   reminderMinutes: Number.parseInt(process.env.REMINDER_MINUTES ?? '15', 10) || 0,
   databasePath: process.env.DATABASE_PATH || 'data/ffxi-jarvis.db',
+  bridgeChannelId: process.env.BRIDGE_CHANNEL_ID || null,
 };
 
 module.exports = config;

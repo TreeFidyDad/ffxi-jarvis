@@ -1,5 +1,20 @@
 const { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits } = require('discord.js');
 
+// ---- Single-instance lock --------------------------------------------------
+// Prevents two bot copies from running at once (which would double-post every
+// linkshell <-> Discord message). The second copy fails to bind and exits.
+const net = require('net');
+const LOCK_PORT = 47615;
+const _lockServer = net.createServer();
+_lockServer.once('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('[Singleton] Another FFXI Jarvis instance is already running. Exiting.');
+    process.exit(0);
+  }
+});
+_lockServer.listen(LOCK_PORT, '127.0.0.1');
+
+
 const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
@@ -10,8 +25,9 @@ const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
 const { parseEventTime } = require('./lib/time');
+const linkshellBridge = require('./lib/linkshellBridge');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildExpressions] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildExpressions, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 // Only the event creator, or a member with Manage Events / Manage Server, may edit.
 function canManageEvent(interaction, event) {
@@ -448,12 +464,20 @@ client.once(Events.ClientReady, async (c) => {
   checkExpired().catch((err) => console.error('Expiry sweep failed:', err));
   setInterval(() => checkExpired().catch((err) => console.error('Expiry sweep failed:', err)), 60 * 1000);
   console.log('Expiry re-render sweep enabled (every 60s).');
+
+  // Start linkshell bridge
+  linkshellBridge.start(client, config.bridgeChannelId);
 });
 
 // Refresh the cache whenever a guild's emojis change.
 client.on(Events.GuildEmojisUpdate, (emojis, guild) => {
   const id = guild?.id || emojis?.first()?.guild?.id;
   if (id) ensureGuildEmojis(client, id, true).catch(() => null);
+});
+
+// ---- Linkshell Bridge: relay Discord messages to FFXI ----------------------
+client.on(Events.MessageCreate, (message) => {
+  linkshellBridge.handleDiscordMessage(message, config.bridgeChannelId);
 });
 
 client.login(config.token);
