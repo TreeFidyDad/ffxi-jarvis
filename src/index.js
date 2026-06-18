@@ -26,6 +26,8 @@ const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
 const { parseEventTime } = require('./lib/time');
 const linkshellBridge = require('./lib/linkshellBridge');
+const chatRelay = require('./lib/chatRelay');
+const tunnel = require('./lib/tunnel');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildExpressions, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
@@ -467,6 +469,45 @@ client.once(Events.ClientReady, async (c) => {
 
   // Start linkshell bridge
   linkshellBridge.start(client, { LS1: config.bridgeChannelId, LS2: config.bridgeChannelId2 });
+
+  // Start in-game chat relay (serves recent channel messages to the discordfeed addon).
+  // Defaults to relaying the bridge channels unless RELAY_CHANNEL_IDS overrides.
+  const relayChannels = config.relayChannelIds.length > 0
+    ? config.relayChannelIds
+    : [config.bridgeChannelId, config.bridgeChannelId2].filter(Boolean);
+  chatRelay.start(relayChannels, config.relayPort);
+
+  // Auto-start a Cloudflare quick tunnel so the relay is reachable publicly
+  // without port forwarding. Quick-tunnel URLs are random and change each
+  // restart, so announce the current one to the bridge channel for discovery.
+  tunnel.onUrl(async (url) => {
+    console.log(`[Tunnel] discordfeed addon host: ${url}`);
+    const announceId = config.tunnelAnnounceChannelId || config.bridgeChannelId;
+    if (!announceId) return;
+    const host = url.replace(/^https?:\/\//, '');
+    try {
+      const channel = await client.channels.fetch(announceId);
+      if (channel && channel.isTextBased()) {
+        await channel.send(
+          `🛰️ **See this linkshell's chat in-game!**\n` +
+          `Install the **discordfeed** addon for Ashita and you'll see Discord chat right in FFXI.\n\n` +
+          `**1. Download:** <https://github.com/TreeFidyDad/discordfeed>\n` +
+          `   (green **Code** button → **Download ZIP**, or \`git clone\`)\n` +
+          `**2. Install:** unzip the \`discordfeed\` folder into\n` +
+          `   \`…\\HorizonXI\\Game\\addons\\discordfeed\\\`\n` +
+          `**3. Load it in-game:**\n` +
+          `\`\`\`\n/addon load discordfeed\n\`\`\`\n` +
+          `**4. Point it at this relay (copy/paste in-game):**\n` +
+          `\`\`\`\n/df host ${host}\n\`\`\`\n` +
+          `_That's it. Full instructions are in the repo's README._\n` +
+          `_Note: this address changes if the bot restarts — just grab the latest \`/df host …\` line from here._`
+        );
+      }
+    } catch (err) {
+      console.error('[Tunnel] Failed to announce URL:', err.message);
+    }
+  });
+  tunnel.start(config.relayPort);
 });
 
 // Refresh the cache whenever a guild's emojis change.
@@ -478,6 +519,7 @@ client.on(Events.GuildEmojisUpdate, (emojis, guild) => {
 // ---- Linkshell Bridge: relay Discord messages to FFXI ----------------------
 client.on(Events.MessageCreate, (message) => {
   linkshellBridge.handleDiscordMessage(message);
+  chatRelay.ingest(message);
 });
 
 client.login(config.token);

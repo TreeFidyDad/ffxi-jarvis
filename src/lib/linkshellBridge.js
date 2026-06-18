@@ -29,6 +29,31 @@ let pollInterval = null;
 const channels = {};        // { LS1: <Channel>, LS2: <Channel> }
 const channelIdToLS = {};   // { "<id>": "LS1", ... }
 
+// ---- Cross-host dedup ------------------------------------------------------
+// When several admins run their own bot for the same linkshell, each would
+// otherwise post the same LS line to Discord (Nx duplicates). Every bot sees
+// every post in the channel via the gateway, so we keep a short-lived record of
+// recently relayed lines and skip any line already posted within the window.
+// First host to post wins; the others observe it and skip. No leader election.
+const recentlyRelayed = new Map(); // key -> timestamp(ms)
+const DEDUP_WINDOW_MS = 8000;
+const KEY_SEP = '\u0001';
+
+function relayKey(ls, body) {
+  return `${ls}${KEY_SEP}${body}`;
+}
+
+function pruneDedup(now) {
+  for (const [key, ts] of recentlyRelayed) {
+    if (now - ts > DEDUP_WINDOW_MS) recentlyRelayed.delete(key);
+  }
+}
+
+function alreadyRelayed(key, now) {
+  const ts = recentlyRelayed.get(key);
+  return ts !== undefined && now - ts <= DEDUP_WINDOW_MS;
+}
+
 /**
  * Start the bridge: poll for FFXI messages and forward to Discord.
  * @param {import('discord.js').Client} client
@@ -93,12 +118,23 @@ function pollFFXIMessages() {
 
     const lines = buf.toString('utf8').split('\n').filter((l) => l.trim());
 
+    const now = Date.now();
+    pruneDedup(now);
+
     for (const line of lines) {
       const { ls, name, message } = parseLine(line);
       const channel = channels[ls];
       if (!channel) continue; // that linkshell isn't bridged / not ready yet
 
       const body = name ? `${name}: ${message}` : message;
+      const key = relayKey(ls, body);
+
+      // Another host already posted this exact LS line — skip to avoid dupes.
+      if (alreadyRelayed(key, now)) continue;
+      // Claim it locally before the async send so a near-simultaneous local
+      // poll won't double-post; other hosts will see our Discord message.
+      recentlyRelayed.set(key, now);
+
       const formatted = `💬 **[${ls}]** ${body}`;
       channel.send(formatted).catch((err) => {
         console.error(`[Bridge] Failed to send to Discord (${ls}):`, err.message);
@@ -126,6 +162,9 @@ function sendToFFXI(ls, username, message) {
  * @param {import('discord.js').Message} message
  */
 function handleDiscordMessage(message) {
+  // Record relayed LS lines posted by any host's bot so this bot can dedup.
+  observeRelayedMessage(message);
+
   const ls = channelIdToLS[message.channel.id];
   if (!ls) return;             // not a bridge channel
   if (message.author.bot) return; // don't relay bot messages back
@@ -136,6 +175,23 @@ function handleDiscordMessage(message) {
 
   // Truncate to FFXI chat limit (~150 chars)
   sendToFFXI(ls, username, content.substring(0, 150));
+}
+
+// Parse a relayed LS post ("💬 **[LS1]** Name: text") back into a dedup key and
+// record it. This lets every host notice when another host has already relayed a
+// given line, so only the first post survives.
+const RELAY_RE = /^💬 \*\*\[(LS\d)\]\*\* ([\s\S]*)$/;
+function observeRelayedMessage(message) {
+  try {
+    if (!channelIdToLS[message.channel.id]) return; // not a bridge channel
+    if (!message.author?.bot) return;               // only bot relay posts
+    const m = (message.content || '').match(RELAY_RE);
+    if (!m) return;
+    const key = relayKey(m[1], m[2]);
+    recentlyRelayed.set(key, Date.now());
+  } catch {
+    // ignore malformed messages
+  }
 }
 
 function stop() {

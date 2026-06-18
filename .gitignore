@@ -7,4 +7,9 @@ node_modules/
 /data/
 npm-debug.log*
 bot.log
+jarvis.out.log
+jarvis.err.log
+cloudflared.log
+cloudflared.err.log
+tunnel-url.txt
 .DS_Store

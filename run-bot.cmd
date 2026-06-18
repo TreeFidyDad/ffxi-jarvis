@@ -1,7 +1,8 @@
 @echo off
 REM FFXI Jarvis launcher — keeps the Discord bot running 24/7 on this PC.
 REM Loops forever: if node ever crashes or exits, it restarts after 5 seconds.
-cd /d "C:\Users\Blake\ffxi-jarvis"
+REM %~dp0 = the folder this script lives in, so it works for any admin/path.
+cd /d "%~dp0"
 :loop
 echo [%date% %time%] starting FFXI Jarvis >> bot.log
 node src\index.js >> bot.log 2>&1

@@ -20,6 +20,12 @@ const config = {
   databasePath: process.env.DATABASE_PATH || 'data/ffxi-jarvis.db',
   bridgeChannelId: process.env.BRIDGE_CHANNEL_ID || null,
   bridgeChannelId2: process.env.BRIDGE_CHANNEL_ID_2 || null,
+  relayPort: Number.parseInt(process.env.RELAY_PORT ?? '3007', 10) || 3007,
+  relayChannelIds: (process.env.RELAY_CHANNEL_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  tunnelAnnounceChannelId: process.env.TUNNEL_ANNOUNCE_CHANNEL_ID || null,
 };
 
 module.exports = config;
