@@ -135,8 +135,7 @@ function pollFFXIMessages() {
       // poll won't double-post; other hosts will see our Discord message.
       recentlyRelayed.set(key, now);
 
-      const formatted = `💬 **[${ls}]** ${body}`;
-      channel.send(formatted).catch((err) => {
+      channel.send(body).catch((err) => {
         console.error(`[Bridge] Failed to send to Discord (${ls}):`, err.message);
       });
     }
@@ -177,18 +176,18 @@ function handleDiscordMessage(message) {
   sendToFFXI(ls, username, content.substring(0, 150));
 }
 
-// Parse a relayed LS post ("💬 **[LS1]** Name: text") back into a dedup key and
-// record it. This lets every host notice when another host has already relayed a
-// given line, so only the first post survives.
-const RELAY_RE = /^💬 \*\*\[(LS\d)\]\*\* ([\s\S]*)$/;
+// Record relayed LS posts from any host's bot so this bot can dedup them. The
+// linkshell is taken from the channel (each LS has its own bridge channel) and
+// the message content is the relay body, so the dedup key matches what
+// pollFFXIMessages computed on the host that posted it.
 function observeRelayedMessage(message) {
   try {
-    if (!channelIdToLS[message.channel.id]) return; // not a bridge channel
-    if (!message.author?.bot) return;               // only bot relay posts
-    const m = (message.content || '').match(RELAY_RE);
-    if (!m) return;
-    const key = relayKey(m[1], m[2]);
-    recentlyRelayed.set(key, Date.now());
+    const ls = channelIdToLS[message.channel.id];
+    if (!ls) return;                  // not a bridge channel
+    if (!message.author?.bot) return; // only bot relay posts
+    const body = message.content || '';
+    if (!body) return;
+    recentlyRelayed.set(relayKey(ls, body), Date.now());
   } catch {
     // ignore malformed messages
   }
