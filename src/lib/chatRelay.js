@@ -13,12 +13,14 @@
  *   GET /chat?after=<seq>
  *     -> text/plain body:
  *        LAST=<maxSeq>
- *        <seq>\t<author>\t<content>
- *        <seq>\t<author>\t<content>
+ *        <seq>\t<author>\t<ts>\t<content>
+ *        <seq>\t<author>\t<ts>\t<content>
  *        ...
- *     Only messages with seq > after are returned. Content newlines are escaped
- *     to the literal two characters "\n" and tabs are replaced with spaces, so
- *     every message is exactly one line with three tab-separated fields.
+ *     <ts> is the Discord message's Unix time (seconds) so clients can show it
+ *     in their own local time. Only messages with seq > after are returned.
+ *     Content newlines are escaped to the literal two characters "\n" and tabs
+ *     are replaced with spaces, so every message is exactly one line with
+ *     four tab-separated fields.
  */
 
 const http = require('http');
@@ -61,12 +63,18 @@ function ingest(message) {
     }
     if (!content) return;
 
+    // Use Discord's own message timestamp so every viewer can render it in
+    // their local time, rather than the moment our relay happened to read it.
+    const ts = message.createdTimestamp
+      ? Math.floor(message.createdTimestamp / 1000)
+      : Math.floor(Date.now() / 1000);
+
     seq += 1;
     buffer.push({
       seq,
       author,
       content,
-      ts: Math.floor(Date.now() / 1000),
+      ts,
     });
     if (buffer.length > MAX_BUFFER) buffer.shift();
   } catch (err) {
@@ -86,7 +94,7 @@ function buildBody(after) {
   let last = after;
   for (const m of buffer) {
     if (m.seq > after) {
-      lines.push(`${m.seq}\t${escapeField(m.author)}\t${escapeField(m.content)}`);
+      lines.push(`${m.seq}\t${escapeField(m.author)}\t${m.ts}\t${escapeField(m.content)}`);
       if (m.seq > last) last = m.seq;
     }
   }
