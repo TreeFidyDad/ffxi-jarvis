@@ -126,7 +126,7 @@ function pollFFXIMessages() {
       const channel = channels[ls];
       if (!channel) continue; // that linkshell isn't bridged / not ready yet
 
-      const body = name ? `${name}: ${message}` : message;
+      const body = name ? `**${name}**: ${message}` : message;
       const key = relayKey(ls, body);
 
       // Another host already posted this exact LS line — skip to avoid dupes.
