@@ -14,6 +14,13 @@ const config = {
   token: required('DISCORD_TOKEN'),
   clientId: required('CLIENT_ID'),
   guildId: process.env.GUILD_ID || null,
+  // Additional guilds to register slash commands in (comma-separated). Useful
+  // when the linkshell bridge channel lives in a different server than the main
+  // events guild, so /bridge etc. appear there too.
+  extraGuildIds: (process.env.EXTRA_GUILD_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
   defaultTimezone: process.env.DEFAULT_TIMEZONE || 'America/New_York',
   defaultImageUrl: process.env.DEFAULT_IMAGE_URL || null,
   reminderMinutes: Number.parseInt(process.env.REMINDER_MINUTES ?? '15', 10) || 0,
