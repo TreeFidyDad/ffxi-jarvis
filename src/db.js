@@ -118,6 +118,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pop_marks_list ON pop_marks(list_id);
 `);
 
+// Generic key/value settings store for runtime-toggleable bot state (e.g. the
+// linkshell bridge's Discord->FFXI direction). Values are stored as TEXT.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  );
+`);
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
@@ -404,6 +413,21 @@ function setUserTimezone(userId, timezone) {
   setUserTimezoneStmt.run(userId, timezone);
 }
 
+// ---- Generic settings KV ---------------------------------------------------
+const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
+function getSetting(key, fallback = null) {
+  const row = getSettingStmt.get(key);
+  return row ? row.value : fallback;
+}
+
+const setSettingStmt = db.prepare(`
+  INSERT INTO settings (key, value) VALUES (?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value
+`);
+function setSetting(key, value) {
+  setSettingStmt.run(key, String(value));
+}
+
 module.exports = {
   db,
   createEvent,
@@ -423,6 +447,8 @@ module.exports = {
   removeSignup,
   getUserTimezone,
   setUserTimezone,
+  getSetting,
+  setSetting,
   addSuggestion,
   getSuggestion,
   getSuggestions,

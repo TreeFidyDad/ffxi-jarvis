@@ -19,6 +19,7 @@ const config = require('./config');
 const db = require('./db');
 const eventCommand = require('./commands/event');
 const popCommand = require('./commands/pop');
+const bridgeCommand = require('./commands/bridge');
 const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildSuggestModal } = require('./lib/embed');
 const { POP, buildPopMessage, buildPopPicker } = require('./lib/poplist');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
@@ -352,6 +353,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await eventCommand.execute(interaction);
       } else if (interaction.commandName === 'pop') {
         await popCommand.execute(interaction);
+      } else if (interaction.commandName === 'bridge') {
+        await bridgeCommand.execute(interaction);
       }
       return;
     }
@@ -469,6 +472,10 @@ client.once(Events.ClientReady, async (c) => {
 
   // Start linkshell bridge
   linkshellBridge.start(client, { LS1: config.bridgeChannelId, LS2: config.bridgeChannelId2 });
+
+  // Restore the persisted 2-way (Discord -> FFXI) relay toggle.
+  const twoWayOn = bridgeCommand.applyPersistedState();
+  console.log(`[Bridge] Discord -> FFXI relay is ${twoWayOn ? 'ON' : 'OFF'} (from saved setting).`);
 
   // Start in-game chat relay (serves recent channel messages to the discordfeed addon).
   // Defaults to relaying the bridge channels unless RELAY_CHANNEL_IDS overrides.

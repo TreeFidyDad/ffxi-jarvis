@@ -25,6 +25,19 @@ if (!fs.existsSync(DISCORD_TO_FFXI)) fs.writeFileSync(DISCORD_TO_FFXI, '');
 let lastReadPos = 0;
 let pollInterval = null;
 
+// Gates the Discord -> FFXI direction (the "2-way" relay). When false, the
+// bridge is one-way: FFXI linkshell chat still mirrors to Discord, but Discord
+// messages are NOT pushed into the game. Toggled from Discord via /bridge.
+let discordToFfxiEnabled = true;
+
+function setDiscordToFfxi(enabled) {
+  discordToFfxiEnabled = !!enabled;
+}
+
+function isDiscordToFfxiEnabled() {
+  return discordToFfxiEnabled;
+}
+
 // Map of LS key -> Discord channel object, and the reverse (channelId -> LS key).
 const channels = {};        // { LS1: <Channel>, LS2: <Channel> }
 const channelIdToLS = {};   // { "<id>": "LS1", ... }
@@ -168,6 +181,9 @@ function handleDiscordMessage(message) {
   if (!ls) return;             // not a bridge channel
   if (message.author.bot) return; // don't relay bot messages back
 
+  // 2-way relay disabled: mirror FFXI->Discord only, drop Discord->FFXI.
+  if (!discordToFfxiEnabled) return;
+
   const username = message.member?.displayName || message.author.username;
   const content = message.content;
   if (!content || content.length === 0) return;
@@ -200,4 +216,4 @@ function stop() {
   }
 }
 
-module.exports = { start, stop, handleDiscordMessage, FFXI_TO_DISCORD, DISCORD_TO_FFXI };
+module.exports = { start, stop, handleDiscordMessage, setDiscordToFfxi, isDiscordToFfxiEnabled, FFXI_TO_DISCORD, DISCORD_TO_FFXI };
