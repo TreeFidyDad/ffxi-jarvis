@@ -26,6 +26,8 @@ const ID = {
   EDIT_LINKS_PREFIX: 'evt:editlinks:', // evt:editlinks:<eventId>
   EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
   EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
+  CREATE_OPEN: 'evt:createopen', // persistent "Create Event" button
+  CREATE_MODAL: 'evt:createmodal', // modal submitted from the board
 };
 
 // ---- Suggestion box custom IDs ---------------------------------------------
@@ -423,6 +425,83 @@ function buildSuggestionList(rows, { status } = {}) {
   return [header, ...lines].join('\n') + more;
 }
 
+// ---- Event creation board (GUI for creating events) -------------------------
+
+// A standing message with a "Create Event" button — anyone with Manage Events
+// can click it and fill in a form to post a new event, no slash command needed.
+function buildCreateBoardMessage() {
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('📅 Create an Event')
+    .setDescription(
+      [
+        'Click the button below to create a new event with signup buttons.',
+        'Fill in the form and the event will be posted in this channel.',
+        '',
+        '**Tip:** Set your timezone first with `/event timezone` so times are read correctly.',
+      ].join('\n'),
+    );
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(ID.CREATE_OPEN)
+      .setLabel('Create Event')
+      .setEmoji('📅')
+      .setStyle(ButtonStyle.Primary),
+  );
+  return { embeds: [embed], components: [row] };
+}
+
+// Modal shown when a user clicks "Create Event" on the board.
+function buildCreateModal() {
+  const titleInput = new TextInputBuilder()
+    .setCustomId('title')
+    .setLabel('Event title')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100)
+    .setPlaceholder('e.g. Sky - Kirin Run');
+
+  const dateInput = new TextInputBuilder()
+    .setCustomId('date')
+    .setLabel('Date (YYYY-MM-DD)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('e.g. 2026-07-05');
+
+  const timeInput = new TextInputBuilder()
+    .setCustomId('time')
+    .setLabel('Start time (e.g. 6pm, 6:30pm, 18:00)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setPlaceholder('e.g. 6pm');
+
+  const descInput = new TextInputBuilder()
+    .setCustomId('description')
+    .setLabel('Description / notes (optional)')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(1000)
+    .setPlaceholder('Any extra info about the event');
+
+  const leaderInput = new TextInputBuilder()
+    .setCustomId('leader')
+    .setLabel('Leader name (optional, defaults to you)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setPlaceholder('Leave blank to use your display name');
+
+  return new ModalBuilder()
+    .setCustomId(ID.CREATE_MODAL)
+    .setTitle('📅 Create Event')
+    .addComponents(
+      new ActionRowBuilder().addComponents(titleInput),
+      new ActionRowBuilder().addComponents(dateInput),
+      new ActionRowBuilder().addComponents(timeInput),
+      new ActionRowBuilder().addComponents(descInput),
+      new ActionRowBuilder().addComponents(leaderInput),
+    );
+}
+
 module.exports = {
   ID,
   SUG,
@@ -432,6 +511,8 @@ module.exports = {
   buildDpsPicker,
   buildEditModal,
   buildEditLinksModal,
+  buildCreateBoardMessage,
+  buildCreateModal,
   buildSuggestModal,
   buildSuggestButtonRow,
   buildSuggestBoardMessage,
