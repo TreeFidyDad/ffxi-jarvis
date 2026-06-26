@@ -22,6 +22,7 @@ const popCommand = require('./commands/pop');
 const bridgeCommand = require('./commands/bridge');
 const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildSuggestModal } = require('./lib/embed');
 const { POP, buildPopMessage, buildPopPicker } = require('./lib/poplist');
+const { CAL, buildCalendarMessage } = require('./lib/calendar');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
 const { ensureGuildEmojis } = require('./lib/guildEmojis');
@@ -345,6 +346,36 @@ async function handleSuggestModal(interaction) {
   });
 }
 
+// Calendar navigation: update the ephemeral calendar embed to the prev/next month.
+async function handleCalendarNav(interaction) {
+  const prefix = interaction.customId.startsWith(CAL.PREV) ? CAL.PREV : CAL.NEXT;
+  const rest = interaction.customId.slice(prefix.length); // "2026:7"
+  const [yearStr, monthStr] = rest.split(':');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  if (!year || !month || month < 1 || month > 12) {
+    return interaction.deferUpdate();
+  }
+
+  const { DateTime } = require('luxon');
+  const timezone = db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
+  const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone: timezone });
+  const monthEnd = monthStart.plus({ months: 1 });
+  const startTs = Math.floor(monthStart.toSeconds());
+  const endTs = Math.floor(monthEnd.toSeconds());
+
+  const events = db.getEventsByRange(interaction.guildId, startTs, endTs);
+  const payload = buildCalendarMessage({
+    year,
+    month,
+    events,
+    guildId: interaction.guildId,
+    timezone,
+  });
+
+  return interaction.update(payload);
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -372,6 +403,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Suggestion box button -> open the suggestion modal.
       if (interaction.customId === SUG.OPEN) {
         await interaction.showModal(buildSuggestModal());
+        return;
+      }
+      // Calendar navigation buttons: cal:prev:<year>:<month> / cal:next:<year>:<month>
+      if (interaction.customId.startsWith(CAL.PREV) || interaction.customId.startsWith(CAL.NEXT)) {
+        await handleCalendarNav(interaction);
         return;
       }
       // Pop checklist: open the member's "I have these" picker.

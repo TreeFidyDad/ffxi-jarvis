@@ -4,10 +4,12 @@ const {
   MessageFlags,
 } = require('discord.js');
 
+const { DateTime } = require('luxon');
 const config = require('../config');
 const db = require('../db');
 const { parseEventTime, isValidTimezone } = require('../lib/time');
 const { buildEventMessage, buildManageComponents, buildSuggestModal, buildSuggestBoardMessage, buildSuggestionList } = require('../lib/embed');
+const { buildCalendarMessage } = require('../lib/calendar');
 
 const data = new SlashCommandBuilder()
   .setName('event')
@@ -85,6 +87,27 @@ const data = new SlashCommandBuilder()
           .setName('tz')
           .setDescription('IANA name, e.g. America/Los_Angeles, America/New_York, Europe/London')
           .setRequired(true),
+      ),
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('calendar')
+      .setDescription('Show a monthly calendar of all scheduled events')
+      .addIntegerOption((o) =>
+        o
+          .setName('month')
+          .setDescription('Month number 1-12 (defaults to current or next month)')
+          .setMinValue(1)
+          .setMaxValue(12)
+          .setRequired(false),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('year')
+          .setDescription('Year (defaults to current year)')
+          .setMinValue(2024)
+          .setMaxValue(2030)
+          .setRequired(false),
       ),
   )
   .addSubcommand((sub) => sub.setName('help').setDescription('How to use the bot'))
@@ -170,6 +193,7 @@ async function execute(interaction) {
         '• Members sign up with the buttons: pick a **role** — Tank, **DPS** (then choose Melee / Physical Ranged / Magical Ranged), or Healer/Support — and a **Job** from the dropdown.',
         '• The roster groups attendees by **Job**, numbers them in signup order, and shows a role summary + headcount.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
+        '• `/event calendar` — view all events for a month in a calendar view. Click any event to jump to its signup sheet.',
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
         '• `/event manage id:<#>` gives you private **Edit Event** / **Edit Links/Image** buttons (only you can see them).',
         '• `/event timezone tz:<IANA>` saves **your** timezone, so the times you type when creating are read in your zone.',
@@ -197,6 +221,29 @@ async function execute(interaction) {
         `✅ Saved. When **you** create events, times will be interpreted in \`${tz}\`.\n` +
         'Everyone still sees each event in their own local time automatically.',
     });
+  }
+
+  if (sub === 'calendar') {
+    const timezone = db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
+    const now = DateTime.now().setZone(timezone);
+    const year = interaction.options.getInteger('year') || now.year;
+    const month = interaction.options.getInteger('month') || now.month;
+
+    const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone: timezone });
+    const monthEnd = monthStart.plus({ months: 1 });
+    const startTs = Math.floor(monthStart.toSeconds());
+    const endTs = Math.floor(monthEnd.toSeconds());
+
+    const events = db.getEventsByRange(interaction.guildId, startTs, endTs);
+    const payload = buildCalendarMessage({
+      year,
+      month,
+      events,
+      guildId: interaction.guildId,
+      timezone,
+    });
+
+    return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
   }
 
   if (sub === 'create') {
