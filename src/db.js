@@ -413,6 +413,15 @@ function setUserTimezone(userId, timezone) {
   setUserTimezoneStmt.run(userId, timezone);
 }
 
+// ---- Calendar queries -------------------------------------------------------
+// Get all events for a guild within a unix-timestamp range (inclusive).
+const getEventsByRangeStmt = db.prepare(
+  'SELECT * FROM events WHERE guild_id = ? AND start_ts >= ? AND start_ts < ? ORDER BY start_ts ASC',
+);
+function getEventsByRange(guildId, startTs, endTs) {
+  return getEventsByRangeStmt.all(guildId, startTs, endTs);
+}
+
 // ---- Generic settings KV ---------------------------------------------------
 const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
 function getSetting(key, fallback = null) {
@@ -441,6 +450,7 @@ module.exports = {
   markReminderSent,
   getJustExpired,
   markExpiredRendered,
+  getEventsByRange,
   getSignup,
   getSignups,
   upsertSignup,
