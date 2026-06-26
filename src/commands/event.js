@@ -85,8 +85,20 @@ const data = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName('tz')
-          .setDescription('IANA name, e.g. America/Los_Angeles, America/New_York, Europe/London')
-          .setRequired(true),
+          .setDescription('Pick your timezone')
+          .setRequired(true)
+          .addChoices(
+            { name: '🇺🇸 Pacific (LA, Seattle, Vegas)', value: 'America/Los_Angeles' },
+            { name: '🇺🇸 Mountain (Denver, Phoenix, SLC)', value: 'America/Denver' },
+            { name: '🇺🇸 Central (Chicago, Dallas, Houston)', value: 'America/Chicago' },
+            { name: '🇺🇸 Eastern (NYC, Atlanta, Miami)', value: 'America/New_York' },
+            { name: '🇺🇸 Hawaii', value: 'Pacific/Honolulu' },
+            { name: '🇺🇸 Alaska', value: 'America/Anchorage' },
+            { name: '🇬🇧 UK (London)', value: 'Europe/London' },
+            { name: '🇪🇺 Central Europe (Paris, Berlin)', value: 'Europe/Paris' },
+            { name: '🇯🇵 Japan (Tokyo)', value: 'Asia/Tokyo' },
+            { name: '🇦🇺 Australia East (Sydney)', value: 'Australia/Sydney' },
+          ),
       ),
   )
   .addSubcommand((sub) =>
@@ -215,17 +227,28 @@ async function execute(interaction) {
     if (!isValidTimezone(tz)) {
       return interaction.reply({
         flags: MessageFlags.Ephemeral,
-        content:
-          `⚠️ \`${tz}\` isn't a valid timezone. Use an IANA name, e.g. ` +
-          '`America/Los_Angeles`, `America/Denver`, `America/Chicago`, `America/New_York`, `Europe/London`, `Australia/Sydney`.',
+        content: `⚠️ That timezone didn't work. Pick one from the dropdown list.`,
       });
     }
     db.setUserTimezone(interaction.user.id, tz);
+    // Show a friendly name in the confirmation.
+    const friendly = {
+      'America/Los_Angeles': 'Pacific',
+      'America/Denver': 'Mountain',
+      'America/Chicago': 'Central',
+      'America/New_York': 'Eastern',
+      'Pacific/Honolulu': 'Hawaii',
+      'America/Anchorage': 'Alaska',
+      'Europe/London': 'UK',
+      'Europe/Paris': 'Central Europe',
+      'Asia/Tokyo': 'Japan',
+      'Australia/Sydney': 'Australia East',
+    }[tz] || tz;
     return interaction.reply({
       flags: MessageFlags.Ephemeral,
       content:
-        `✅ Saved. When **you** create events, times will be interpreted in \`${tz}\`.\n` +
-        'Everyone still sees each event in their own local time automatically.',
+        `✅ You're set to **${friendly}** time (\`${tz}\`).\n` +
+        'Now when you create events, the times you type will be in your timezone. 👍',
     });
   }
 
