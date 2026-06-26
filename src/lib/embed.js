@@ -483,12 +483,12 @@ function buildCreateModal() {
     .setMaxLength(1000)
     .setPlaceholder('Any extra info about the event');
 
-  const leaderInput = new TextInputBuilder()
-    .setCustomId('leader')
-    .setLabel('Leader name (optional, defaults to you)')
+  const tzInput = new TextInputBuilder()
+    .setCustomId('timezone')
+    .setLabel('Timezone (PST, MST, CST, EST, or leave blank)')
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
-    .setPlaceholder('Leave blank to use your display name');
+    .setPlaceholder('e.g. PST, EST, CST, MST (blank = your saved tz)');
 
   return new ModalBuilder()
     .setCustomId(ID.CREATE_MODAL)
@@ -498,7 +498,7 @@ function buildCreateModal() {
       new ActionRowBuilder().addComponents(dateInput),
       new ActionRowBuilder().addComponents(timeInput),
       new ActionRowBuilder().addComponents(descInput),
-      new ActionRowBuilder().addComponents(leaderInput),
+      new ActionRowBuilder().addComponents(tzInput),
     );
 }
 

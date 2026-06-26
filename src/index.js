@@ -352,19 +352,48 @@ async function handleCreateModal(interaction) {
   const date = interaction.fields.getTextInputValue('date').trim();
   const time = interaction.fields.getTextInputValue('time').trim();
   const description = interaction.fields.getTextInputValue('description').trim() || null;
-  const leaderRaw = interaction.fields.getTextInputValue('leader').trim();
+  const tzRaw = interaction.fields.getTextInputValue('timezone').trim().toUpperCase();
 
   if (!title) {
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Title cannot be empty.' });
   }
 
-  const timezone = db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
+  // Map common abbreviations to IANA timezones.
+  const TZ_ALIASES = {
+    PST: 'America/Los_Angeles', PT: 'America/Los_Angeles', PACIFIC: 'America/Los_Angeles',
+    MST: 'America/Denver', MT: 'America/Denver', MOUNTAIN: 'America/Denver',
+    CST: 'America/Chicago', CT: 'America/Chicago', CENTRAL: 'America/Chicago',
+    EST: 'America/New_York', ET: 'America/New_York', EASTERN: 'America/New_York',
+    HST: 'Pacific/Honolulu', HAWAII: 'Pacific/Honolulu',
+    AKST: 'America/Anchorage', ALASKA: 'America/Anchorage',
+    GMT: 'Europe/London', UK: 'Europe/London',
+    JST: 'Asia/Tokyo',
+  };
+
+  let timezone;
+  if (tzRaw && TZ_ALIASES[tzRaw]) {
+    timezone = TZ_ALIASES[tzRaw];
+  } else if (tzRaw) {
+    // Try it as a raw IANA name.
+    const { DateTime } = require('luxon');
+    if (DateTime.local().setZone(tzRaw).isValid) {
+      timezone = tzRaw;
+    } else {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: `⚠️ Unknown timezone "${tzRaw}". Try: **PST**, **MST**, **CST**, **EST**, or leave blank.`,
+      });
+    }
+  } else {
+    timezone = db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
+  }
+
   const parsed = parseEventTime(date, time, timezone);
   if (!parsed.ok) {
     return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ ${parsed.error}` });
   }
 
-  const leader = leaderRaw || interaction.member?.displayName || interaction.user.username;
+  const leader = interaction.member?.displayName || interaction.user.username;
 
   const event = db.createEvent({
     guildId: interaction.guildId,
