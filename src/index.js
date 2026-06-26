@@ -20,7 +20,7 @@ const db = require('./db');
 const eventCommand = require('./commands/event');
 const popCommand = require('./commands/pop');
 const bridgeCommand = require('./commands/bridge');
-const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildSuggestModal } = require('./lib/embed');
+const { ID, SUG, buildEventMessage, buildManageComponents, buildDpsPicker, buildEditModal, buildEditLinksModal, buildCreateModal, buildSuggestModal } = require('./lib/embed');
 const { POP, buildPopMessage, buildPopPicker } = require('./lib/poplist');
 const { CAL, buildCalendarMessage } = require('./lib/calendar');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
@@ -346,6 +346,68 @@ async function handleSuggestModal(interaction) {
   });
 }
 
+// Handle the "Create Event" modal submission from the board button.
+async function handleCreateModal(interaction) {
+  const title = interaction.fields.getTextInputValue('title').trim();
+  const date = interaction.fields.getTextInputValue('date').trim();
+  const time = interaction.fields.getTextInputValue('time').trim();
+  const description = interaction.fields.getTextInputValue('description').trim() || null;
+  const leaderRaw = interaction.fields.getTextInputValue('leader').trim();
+
+  if (!title) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: '⚠️ Title cannot be empty.' });
+  }
+
+  const timezone = db.getUserTimezone(interaction.user.id) || config.defaultTimezone;
+  const parsed = parseEventTime(date, time, timezone);
+  if (!parsed.ok) {
+    return interaction.reply({ flags: MessageFlags.Ephemeral, content: `⚠️ ${parsed.error}` });
+  }
+
+  const leader = leaderRaw || interaction.member?.displayName || interaction.user.username;
+
+  const event = db.createEvent({
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    creatorId: interaction.user.id,
+    creatorName: interaction.member?.displayName || interaction.user.username,
+    leader,
+    title,
+    description,
+    startTs: parsed.ts,
+    timezone,
+    url: null,
+    imageUrl: config.defaultImageUrl || null,
+    cap: null,
+    durationMin: 120,
+  });
+
+  let message;
+  try {
+    message = await interaction.channel.send(buildEventMessage(event, []));
+  } catch (error) {
+    db.deleteEvent(event.id);
+    if (error?.code === 50001 || error?.code === 50013) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content:
+          "⛔ I can't post in this channel. Please give me **Send Messages** and **Embed Links** permissions.",
+      });
+    }
+    throw error;
+  }
+  db.setEventMessage(event.id, message.id);
+
+  return interaction.reply({
+    flags: MessageFlags.Ephemeral,
+    content:
+      `✅ Created event **#${event.id}** — ${title}.\n` +
+      `🕒 Times interpreted in \`${timezone}\`. Change with \`/event timezone\`.\n` +
+      `Use \`/event manage id:${event.id}\` to edit details like cap, links, or image.`,
+    components: buildManageComponents(event),
+  });
+}
+
 // Calendar navigation: update the ephemeral calendar embed to the prev/next month.
 async function handleCalendarNav(interaction) {
   const prefix = interaction.customId.startsWith(CAL.PREV) ? CAL.PREV : CAL.NEXT;
@@ -392,6 +454,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isModalSubmit()) {
       if (interaction.customId === SUG.MODAL) {
         await handleSuggestModal(interaction);
+      } else if (interaction.customId === ID.CREATE_MODAL) {
+        await handleCreateModal(interaction);
       } else if (interaction.customId.startsWith(ID.EDIT_MODAL_PREFIX)) {
         await handleEditModal(interaction);
       } else if (interaction.customId.startsWith(ID.EDIT_LINKS_MODAL_PREFIX)) {
@@ -400,6 +464,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      // "Create Event" board button -> open the creation form.
+      if (interaction.customId === ID.CREATE_OPEN) {
+        if (
+          !interaction.memberPermissions?.has(PermissionFlagsBits.ManageEvents) &&
+          !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
+        ) {
+          return interaction.reply({
+            flags: MessageFlags.Ephemeral,
+            content: '⛔ Only members with **Manage Events** or **Manage Server** can create events.',
+          });
+        }
+        await interaction.showModal(buildCreateModal());
+        return;
+      }
       // Suggestion box button -> open the suggestion modal.
       if (interaction.customId === SUG.OPEN) {
         await interaction.showModal(buildSuggestModal());

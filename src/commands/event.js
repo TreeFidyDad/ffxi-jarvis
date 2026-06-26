@@ -8,7 +8,7 @@ const { DateTime } = require('luxon');
 const config = require('../config');
 const db = require('../db');
 const { parseEventTime, isValidTimezone } = require('../lib/time');
-const { buildEventMessage, buildManageComponents, buildSuggestModal, buildSuggestBoardMessage, buildSuggestionList } = require('../lib/embed');
+const { buildEventMessage, buildManageComponents, buildCreateBoardMessage, buildSuggestModal, buildSuggestBoardMessage, buildSuggestionList } = require('../lib/embed');
 const { buildCalendarMessage } = require('../lib/calendar');
 
 const data = new SlashCommandBuilder()
@@ -111,6 +111,11 @@ const data = new SlashCommandBuilder()
       ),
   )
   .addSubcommand((sub) => sub.setName('help').setDescription('How to use the bot'))
+  .addSubcommand((sub) =>
+    sub
+      .setName('board')
+      .setDescription('Post a "Create Event" button here (anyone with Manage Events can use it)'),
+  )
   .addSubcommandGroup((group) =>
     group
       .setName('suggest')
@@ -193,6 +198,7 @@ async function execute(interaction) {
         '• Members sign up with the buttons: pick a **role** — Tank, **DPS** (then choose Melee / Physical Ranged / Magical Ranged), or Healer/Support — and a **Job** from the dropdown.',
         '• The roster groups attendees by **Job**, numbers them in signup order, and shows a role summary + headcount.',
         '• `Tentative` / `Absence` mark non-attendance. `Withdraw` removes you.',
+        '• `/event board` — post a "Create Event" button so organizers can create events via a form (no slash command needed).',
         '• `/event calendar` — view all events for a month in a calendar view. Click any event to jump to its signup sheet.',
         '• `/event close id:<#>` locks signups. `/event delete id:<#>` removes it.',
         '• `/event manage id:<#>` gives you private **Edit Event** / **Edit Links/Image** buttons (only you can see them).',
@@ -244,6 +250,30 @@ async function execute(interaction) {
     });
 
     return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+  }
+
+  if (sub === 'board') {
+    if (!canManage(interaction)) {
+      return interaction.reply({
+        flags: MessageFlags.Ephemeral,
+        content: '⛔ Only members with Manage Events or Manage Server can post the event board.',
+      });
+    }
+    try {
+      await interaction.channel.send(buildCreateBoardMessage());
+    } catch (error) {
+      if (error?.code === 50001 || error?.code === 50013) {
+        return interaction.reply({
+          flags: MessageFlags.Ephemeral,
+          content: "⛔ I can't post in this channel. Give me **Send Messages** and **Embed Links** here, then try again.",
+        });
+      }
+      throw error;
+    }
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '✅ Posted the Create Event board here. Members with Manage Events can use it to create events via the form.',
+    });
   }
 
   if (sub === 'create') {
