@@ -26,9 +26,16 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
   const monthName = monthStart.toFormat('LLLL yyyy');
   const daysInMonth = monthStart.daysInMonth;
 
+  // Filter out expired events (past their end time).
+  const nowTs = Math.floor(Date.now() / 1000);
+  const upcoming = events.filter((evt) => {
+    const endTs = evt.start_ts + (evt.duration_min || 120) * 60;
+    return endTs > nowTs;
+  });
+
   // Group events by day-of-month.
   const byDay = new Map();
-  for (const evt of events) {
+  for (const evt of upcoming) {
     const dt = DateTime.fromSeconds(evt.start_ts, { zone });
     const day = dt.day;
     if (!byDay.has(day)) byDay.set(day, []);
