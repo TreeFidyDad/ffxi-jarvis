@@ -47,9 +47,36 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
     dayEvents.sort((a, b) => a.start_ts - b.start_ts);
   }
 
-  // Build the calendar body — list events by day.
+  // Build the calendar body.
   const lines = [];
 
+  // ---- Visual grid calendar ----
+  // Build a monospace grid showing the month with markers on event days.
+  const eventDays = new Set([...byDay.keys()]);
+  const startDow = monthStart.weekday; // 1=Mon, 7=Sun
+  
+  let grid = ' Mo Tu We Th Fr Sa Su\n';
+  let cell = 0;
+  // Pad the first row.
+  for (let i = 1; i < startDow; i++) {
+    grid += '   ';
+    cell++;
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const marker = eventDays.has(day) ? '*' : ' ';
+    const dayStr = String(day).padStart(2, ' ');
+    grid += `${marker}${dayStr}`;
+    cell++;
+    if (cell % 7 === 0) grid += '\n';
+  }
+
+  lines.push('```');
+  lines.push(grid.trimEnd());
+  lines.push('```');
+  lines.push('`*` = has event(s)');
+  lines.push('');
+
+  // ---- Event list ----
   if (upcoming.length === 0) {
     lines.push('*No upcoming events this month.*');
   } else {
@@ -58,7 +85,7 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
       const dayEvents = byDay.get(day);
       const dt = DateTime.fromObject({ year, month, day }, { zone });
       const dow = dt.toFormat('ccc'); // Mon, Tue, etc.
-      lines.push(`### ${dow}, ${dt.toFormat('LLLL d')}`);
+      lines.push(`**${dow}, ${dt.toFormat('LLLL d')}**`);
       for (const evt of dayEvents) {
         const evtDt = DateTime.fromSeconds(evt.start_ts, { zone });
         const time = evtDt.toFormat('h:mm a');
