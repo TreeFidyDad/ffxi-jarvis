@@ -1,7 +1,7 @@
 {
   "name": "ffxi-jarvis",
   "version": "0.1.0",
-  "description": "FFXI Jarvis \u2014 a free, open-source, self-hostable Discord event/raid signup bot for Final Fantasy XI. An alternative to Raid-Helper with FFXI Jobs and Tank/Melee/Ranged/Support roles.",
+  "description": "FFXI Jarvis — a free, open-source, self-hostable Discord event/raid signup bot for Final Fantasy XI. An alternative to Raid-Helper with FFXI Jobs and Tank/Melee/Ranged/Support roles.",
   "type": "commonjs",
   "main": "src/index.js",
   "scripts": {
@@ -13,6 +13,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.1",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
     "luxon": "^3.5.0"
