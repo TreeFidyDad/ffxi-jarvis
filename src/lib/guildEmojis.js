@@ -98,9 +98,52 @@ function roleEmojiComponent(guildId, names) {
   return e ? { id: e.id, name: e.name, animated: e.animated } : null;
 }
 
+// Copy ffxi_* and role_* emojis from a source guild to a target guild.
+// Skips any emoji the target already has (by name). Requires Manage Emojis.
+async function syncEmojisToGuild(client, sourceGuildId, targetGuildId) {
+  if (sourceGuildId === targetGuildId) return;
+
+  // Fetch emojis from both guilds.
+  const sourceEmojis = await client.rest.get(Routes.guildEmojis(sourceGuildId)).catch(() => []);
+  const targetEmojis = await client.rest.get(Routes.guildEmojis(targetGuildId)).catch(() => []);
+
+  const targetNames = new Set(targetEmojis.map((e) => e.name));
+
+  // Filter source emojis to only ffxi_* and role_* that target is missing.
+  const toSync = sourceEmojis.filter((e) => {
+    if (targetNames.has(e.name)) return false;
+    return /^(ffxi|role)[_-]/i.test(e.name || '');
+  });
+
+  if (!toSync.length) return;
+
+  console.log(`[Emoji Sync] Copying ${toSync.length} emoji(s) from ${sourceGuildId} to ${targetGuildId}...`);
+
+  for (const emoji of toSync) {
+    try {
+      const ext = emoji.animated ? 'gif' : 'png';
+      const url = `https://cdn.discordapp.com/emojis/${emoji.id}.${ext}`;
+      const res = await fetch(url);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const base64 = `data:image/${ext};base64,${buffer.toString('base64')}`;
+
+      await client.rest.post(Routes.guildEmojis(targetGuildId), {
+        body: { name: emoji.name, image: base64 },
+      });
+      console.log(`[Emoji Sync] ✓ ${emoji.name}`);
+    } catch (err) {
+      console.error(`[Emoji Sync] ✗ ${emoji.name}: ${err.message || err}`);
+    }
+  }
+
+  // Re-index the target guild's emojis after upload.
+  await ensureGuildEmojis(client, targetGuildId, true);
+}
+
 module.exports = {
   indexEmojis,
   ensureGuildEmojis,
+  syncEmojisToGuild,
   jobEmojiMention,
   jobEmojiComponent,
   roleEmojiMention,
