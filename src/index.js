@@ -25,7 +25,7 @@ const { POP, buildPopMessage, buildPopPicker } = require('./lib/poplist');
 const { CAL, buildCalendarMessage } = require('./lib/calendar');
 const { ROLE_BY_KEY, STATUS } = require('./data/roles');
 const { JOB_BY_CODE } = require('./data/jobs');
-const { ensureGuildEmojis } = require('./lib/guildEmojis');
+const { ensureGuildEmojis, syncEmojisToGuild } = require('./lib/guildEmojis');
 const { parseEventTime } = require('./lib/time');
 const linkshellBridge = require('./lib/linkshellBridge');
 const chatRelay = require('./lib/chatRelay');
@@ -650,6 +650,15 @@ client.once(Events.ClientReady, async (c) => {
       console.error(`Failed to index emojis for guild ${guild.id}:`, err);
     }
   }
+
+  // Sync custom FFXI/role emojis from the source guild to all other guilds.
+  const EMOJI_SOURCE_GUILD = '1500983836865986681';
+  for (const guild of c.guilds.cache.values()) {
+    if (guild.id === EMOJI_SOURCE_GUILD) continue;
+    syncEmojisToGuild(client, EMOJI_SOURCE_GUILD, guild.id).catch((err) =>
+      console.error(`[Emoji Sync] Error syncing to ${guild.id}:`, err),
+    );
+  }
   if (config.reminderMinutes > 0) {
     setInterval(checkReminders, 60 * 1000);
     console.log(`Reminders enabled: ${config.reminderMinutes} minute(s) before start.`);
@@ -710,6 +719,15 @@ client.once(Events.ClientReady, async (c) => {
 client.on(Events.GuildEmojisUpdate, (emojis, guild) => {
   const id = guild?.id || emojis?.first()?.guild?.id;
   if (id) ensureGuildEmojis(client, id, true).catch(() => null);
+});
+
+// When the bot joins a new guild, sync emojis from the source guild.
+client.on(Events.GuildCreate, (guild) => {
+  const EMOJI_SOURCE_GUILD = '1500983836865986681';
+  if (guild.id === EMOJI_SOURCE_GUILD) return;
+  syncEmojisToGuild(client, EMOJI_SOURCE_GUILD, guild.id).catch((err) =>
+    console.error(`[Emoji Sync] Error syncing to new guild ${guild.id}:`, err),
+  );
 });
 
 // ---- Linkshell Bridge: relay Discord messages to FFXI ----------------------
