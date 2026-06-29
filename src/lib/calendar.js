@@ -49,11 +49,9 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
 
   // Build the calendar body — list events by day.
   const lines = [];
-  lines.push(`## 📅 ${monthName}`);
-  lines.push('');
 
-  if (events.length === 0) {
-    lines.push('*No events scheduled this month.*');
+  if (upcoming.length === 0) {
+    lines.push('*No upcoming events this month.*');
   } else {
     for (let day = 1; day <= daysInMonth; day++) {
       if (!byDay.has(day)) continue;
@@ -76,9 +74,11 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
     }
   }
 
+  const description = lines.join('\n').trim() || '*No upcoming events this month.*';
+
   const embed = new EmbedBuilder()
     .setTitle(`📅  ${monthName} Events`)
-    .setDescription(lines.slice(2).join('\n')) // skip the markdown title since we use embed title
+    .setDescription(description)
     .setColor(0x5865f2)
     .setFooter({ text: `Timezone: ${zone} • Click an event to open its signup sheet` });
 
