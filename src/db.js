@@ -127,6 +127,20 @@ db.exec(`
   );
 `);
 
+// Posted calendar messages that auto-update when events change.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS calendar_posts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    timezone   TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_calendar_posts_guild ON calendar_posts(guild_id);
+`);
+
 const now = () => Math.floor(Date.now() / 1000);
 
 // ---- Events ----------------------------------------------------------------
@@ -437,6 +451,27 @@ function setSetting(key, value) {
   setSettingStmt.run(key, String(value));
 }
 
+// ---- Calendar posts (auto-updating) ----------------------------------------
+const insertCalendarPostStmt = db.prepare(`
+  INSERT INTO calendar_posts (guild_id, channel_id, message_id, timezone, created_at)
+  VALUES (?, ?, ?, ?, ?)
+`);
+function addCalendarPost({ guildId, channelId, messageId, timezone }) {
+  insertCalendarPostStmt.run(guildId, channelId, messageId, timezone, now());
+}
+
+const getCalendarPostsStmt = db.prepare(
+  'SELECT * FROM calendar_posts WHERE guild_id = ?',
+);
+function getCalendarPosts(guildId) {
+  return getCalendarPostsStmt.all(guildId);
+}
+
+const deleteCalendarPostStmt = db.prepare('DELETE FROM calendar_posts WHERE id = ?');
+function deleteCalendarPost(id) {
+  deleteCalendarPostStmt.run(id);
+}
+
 module.exports = {
   db,
   createEvent,
@@ -463,6 +498,9 @@ module.exports = {
   getSuggestion,
   getSuggestions,
   setSuggestionStatus,
+  addCalendarPost,
+  getCalendarPosts,
+  deleteCalendarPost,
   createPopList,
   getPopList,
   getPopListByMessage,

@@ -272,7 +272,32 @@ async function execute(interaction) {
       timezone,
     });
 
-    return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+    // Post publicly so it persists and auto-updates.
+    let message;
+    try {
+      message = await interaction.channel.send(payload);
+    } catch (error) {
+      if (error?.code === 50001 || error?.code === 50013) {
+        return interaction.reply({
+          flags: MessageFlags.Ephemeral,
+          content: "⛔ I can't post in this channel. Give me **Send Messages** and **Embed Links** here.",
+        });
+      }
+      throw error;
+    }
+
+    // Track this calendar message so it auto-updates when events change.
+    db.addCalendarPost({
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      messageId: message.id,
+      timezone,
+    });
+
+    return interaction.reply({
+      flags: MessageFlags.Ephemeral,
+      content: '✅ Calendar posted! It will auto-update when events are created or deleted.',
+    });
   }
 
   if (sub === 'board') {

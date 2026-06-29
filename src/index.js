@@ -427,6 +427,9 @@ async function handleCreateModal(interaction) {
   }
   db.setEventMessage(event.id, message.id);
 
+  // Auto-update any posted calendars for this guild.
+  await refreshCalendarPosts(event.guild_id);
+
   return interaction.reply({
     flags: MessageFlags.Ephemeral,
     content:
@@ -435,6 +438,44 @@ async function handleCreateModal(interaction) {
       `Use \`/event manage id:${event.id}\` to edit details like cap, links, or image.`,
     components: buildManageComponents(event),
   });
+}
+
+// Refresh all posted calendar messages for a guild (called when events change).
+async function refreshCalendarPosts(guildId) {
+  const { DateTime } = require('luxon');
+  const posts = db.getCalendarPosts(guildId);
+  for (const post of posts) {
+    try {
+      const channel = await client.channels.fetch(post.channel_id).catch(() => null);
+      if (!channel) {
+        db.deleteCalendarPost(post.id);
+        continue;
+      }
+      const message = await channel.messages.fetch(post.message_id).catch(() => null);
+      if (!message) {
+        db.deleteCalendarPost(post.id);
+        continue;
+      }
+
+      // Re-render the current month's calendar.
+      const zone = post.timezone || config.defaultTimezone;
+      const now = DateTime.now().setZone(zone);
+      const year = now.year;
+      const month = now.month;
+      const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone });
+      const monthEnd = monthStart.plus({ months: 1 });
+      const startTs = Math.floor(monthStart.toSeconds());
+      const endTs = Math.floor(monthEnd.toSeconds());
+
+      const events = db.getEventsByRange(guildId, startTs, endTs);
+      const payload = buildCalendarMessage({ year, month, events, guildId, timezone: zone });
+
+      await message.edit(payload);
+    } catch (err) {
+      // If we can't edit, remove the tracked post.
+      db.deleteCalendarPost(post.id);
+    }
+  }
 }
 
 // Calendar navigation: update the ephemeral calendar embed to the prev/next month.
@@ -473,6 +514,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (interaction.commandName === 'event') {
         if (interaction.guildId) await ensureGuildEmojis(client, interaction.guildId);
         await eventCommand.execute(interaction);
+        // Auto-refresh calendars after event changes.
+        const sub = interaction.options.getSubcommand(false);
+        if (['create', 'delete', 'close'].includes(sub) && interaction.guildId) {
+          await refreshCalendarPosts(interaction.guildId);
+        }
       } else if (interaction.commandName === 'pop') {
         await popCommand.execute(interaction);
       } else if (interaction.commandName === 'bridge') {
