@@ -64,10 +64,11 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
         const time = evtDt.toFormat('h:mm a');
         const link = buildEventLink(evt, guildId);
         const status = evt.status === 'closed' ? ' 🔒' : '';
+        const id = `\`#${evt.id}\``;
         if (link) {
-          lines.push(`> ⏰ **${time}** — [${evt.title}](${link})${status}`);
+          lines.push(`> ⏰ **${time}** — ${id} [${evt.title}](${link})${status}`);
         } else {
-          lines.push(`> ⏰ **${time}** — **${evt.title}**${status}`);
+          lines.push(`> ⏰ **${time}** — ${id} **${evt.title}**${status}`);
         }
       }
       lines.push('');
