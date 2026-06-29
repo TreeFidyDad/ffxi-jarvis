@@ -651,13 +651,28 @@ client.once(Events.ClientReady, async (c) => {
     }
   }
 
-  // Sync custom FFXI/role emojis from the source guild to all other guilds.
+  // Sync custom FFXI/role emojis from the source guild to all other guilds,
+  // then re-render all open event messages so they pick up new emoji mentions.
   const EMOJI_SOURCE_GUILD = '1500983836865986681';
   for (const guild of c.guilds.cache.values()) {
     if (guild.id === EMOJI_SOURCE_GUILD) continue;
-    syncEmojisToGuild(client, EMOJI_SOURCE_GUILD, guild.id).catch((err) =>
-      console.error(`[Emoji Sync] Error syncing to ${guild.id}:`, err),
-    );
+    try {
+      await syncEmojisToGuild(client, EMOJI_SOURCE_GUILD, guild.id);
+    } catch (err) {
+      console.error(`[Emoji Sync] Error syncing to ${guild.id}:`, err);
+    }
+  }
+
+  // Re-render all open event posts so emojis/content stay current.
+  const allOpen = db.db.prepare("SELECT id FROM events WHERE status = 'open' AND message_id IS NOT NULL").all();
+  if (allOpen.length) {
+    console.log(`[Startup] Re-rendering ${allOpen.length} open event(s)...`);
+    for (const row of allOpen) {
+      await rerenderEvent(row.id).catch((err) =>
+        console.error(`[Startup] Re-render event #${row.id} failed:`, err),
+      );
+    }
+    console.log('[Startup] Event re-render complete.');
   }
   if (config.reminderMinutes > 0) {
     setInterval(checkReminders, 60 * 1000);
