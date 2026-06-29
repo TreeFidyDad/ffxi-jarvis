@@ -81,12 +81,16 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
 
   const description = lines.join('\n').trim() || '*No upcoming events this month.*';
 
-  const embed = new EmbedBuilder()
+  // Two embeds: image on top, event list below.
+  const imageEmbed = new EmbedBuilder()
     .setTitle(`📅  ${monthName} Events`)
-    .setDescription(description)
     .setImage('attachment://calendar.png')
+    .setColor(0x5865f2);
+
+  const listEmbed = new EmbedBuilder()
+    .setDescription(description)
     .setColor(0x5865f2)
-    .setFooter({ text: `Timezone: ${zone} • Click an event to open its signup sheet • 🟢 = today, 🔵 = has events` });
+    .setFooter({ text: `Timezone: ${zone} • Click an event to jump to its signup sheet • 🟢 = today, 🔵 = has events` });
 
   // Navigation buttons.
   const prev = monthStart.minus({ months: 1 });
@@ -102,7 +106,7 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row], files: [attachment] };
+  return { embeds: [imageEmbed, listEmbed], components: [row], files: [attachment] };
 }
 
 /**
