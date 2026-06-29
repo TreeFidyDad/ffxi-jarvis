@@ -55,17 +55,17 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
   const eventDays = new Set([...byDay.keys()]);
   const startDow = monthStart.weekday; // 1=Mon, 7=Sun
   
-  let grid = ' Mo Tu We Th Fr Sa Su\n';
+  let grid = ' Mo  Tu  We  Th  Fr  Sa  Su\n';
   let cell = 0;
   // Pad the first row.
   for (let i = 1; i < startDow; i++) {
-    grid += '   ';
+    grid += '    ';
     cell++;
   }
   for (let day = 1; day <= daysInMonth; day++) {
     const marker = eventDays.has(day) ? '*' : ' ';
     const dayStr = String(day).padStart(2, ' ');
-    grid += `${marker}${dayStr}`;
+    grid += `${dayStr}${marker} `;
     cell++;
     if (cell % 7 === 0) grid += '\n';
   }
