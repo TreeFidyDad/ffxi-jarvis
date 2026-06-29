@@ -1,14 +1,12 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
+const { renderCalendarImage } = require('./calendarImage');
 
 // Custom IDs for calendar navigation buttons.
 const CAL = {
   PREV: 'cal:prev:',   // cal:prev:<year>:<month>
   NEXT: 'cal:next:',   // cal:next:<year>:<month>
 };
-
-// Day-of-week headers (Mon–Sun).
-const DOW_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /**
  * Build a calendar embed + navigation buttons for a given month.
@@ -50,31 +48,10 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
   // Build the calendar body.
   const lines = [];
 
-  // ---- Visual grid calendar ----
-  // Build a monospace grid showing the month with markers on event days.
+  // ---- Render calendar grid as an image ----
   const eventDays = new Set([...byDay.keys()]);
-  const startDow = monthStart.weekday; // 1=Mon, 7=Sun
-  
-  let grid = ' Mo  Tu  We  Th  Fr  Sa  Su\n';
-  let cell = 0;
-  // Pad the first row.
-  for (let i = 1; i < startDow; i++) {
-    grid += '    ';
-    cell++;
-  }
-  for (let day = 1; day <= daysInMonth; day++) {
-    const marker = eventDays.has(day) ? '*' : ' ';
-    const dayStr = String(day).padStart(2, ' ');
-    grid += `${dayStr}${marker} `;
-    cell++;
-    if (cell % 7 === 0) grid += '\n';
-  }
-
-  lines.push('```');
-  lines.push(grid.trimEnd());
-  lines.push('```');
-  lines.push('`*` = has event(s)');
-  lines.push('');
+  const calImage = renderCalendarImage({ year, month, eventDays, timezone: zone });
+  const attachment = new AttachmentBuilder(calImage, { name: 'calendar.png' });
 
   // ---- Event list ----
   if (upcoming.length === 0) {
@@ -107,8 +84,9 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
   const embed = new EmbedBuilder()
     .setTitle(`📅  ${monthName} Events`)
     .setDescription(description)
+    .setImage('attachment://calendar.png')
     .setColor(0x5865f2)
-    .setFooter({ text: `Timezone: ${zone} • Click an event to open its signup sheet` });
+    .setFooter({ text: `Timezone: ${zone} • Click an event to open its signup sheet • 🟢 = today, 🔵 = has events` });
 
   // Navigation buttons.
   const prev = monthStart.minus({ months: 1 });
@@ -124,7 +102,7 @@ function buildCalendarMessage({ year, month, events, guildId, timezone }) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row], files: [attachment] };
 }
 
 /**
